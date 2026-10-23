@@ -52,6 +52,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showMatches by rememberSaveable { mutableStateOf(false) }
+    var showContracts by rememberSaveable { mutableStateOf(false) }
     val openMatch by shopVm.openMatch.collectAsStateWithLifecycle()
     var lockEnabled by remember { mutableStateOf(AppLock.isEnabled(context)) }
     var settingsMessage by remember { mutableStateOf<String?>(null) }
@@ -137,6 +138,18 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
 
     openMatch?.let {
         MatchDetailScreen(it, onBack = { shopVm.openMatch(null) })
+        return
+    }
+
+    if (showContracts) {
+        LaunchedEffect(Unit) { shopVm.loadContracts() }
+        ContractsScreen(
+            overview = shop.contracts,
+            loading = shop.contractsLoading,
+            error = shop.contractsError,
+            onRefresh = shopVm::loadContracts,
+            onBack = { showContracts = false },
+        )
         return
     }
 
@@ -227,6 +240,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     error = shop.profileError,
                     onRefresh = shopVm::loadProfile,
                     onOpenMatches = { showMatches = true },
+                    onOpenContracts = { showContracts = true },
                 )
                 tab == Tab.SHOP -> OfferListScreen(
                     title = "Toko harian",

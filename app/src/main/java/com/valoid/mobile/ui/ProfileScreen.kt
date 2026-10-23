@@ -42,6 +42,7 @@ fun ProfileScreen(
     error: String?,
     onRefresh: () -> Unit,
     onOpenMatches: () -> Unit,
+    onOpenContracts: () -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -62,6 +63,7 @@ fun ProfileScreen(
                 item { ProfileHeader(profile) }
                 item { RankCard(profile.currentRank, profile.peakRank) }
                 item { MenuRow("Riwayat match", "Hasil, skor, K/D/A, dan papan skor tiap match", onOpenMatches) }
+                item { MenuRow("Kontrak & misi", "Progres Battle Pass, kontrak agent, dan misi harian/mingguan", onOpenContracts) }
                 item {
                     OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
                         Text(if (loading) "Memuat..." else "Muat ulang profil")

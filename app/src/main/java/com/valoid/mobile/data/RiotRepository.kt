@@ -344,6 +344,118 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         else -> queue.replaceFirstChar { it.uppercase() }
     }
 
+    suspend fun loadContracts(session: RiotSession): ContractsOverview = withContext(Dispatchers.IO) {
+        parseContracts(get(pd(session, "contracts/v1/contracts/${session.puuid}").build()).jsonObject)
+    }
+
+    /**
+     * Dari respons `contracts/v1/contracts`: Battle Pass act yang sedang berjalan, kontrak agent yang
+     * aktif, dan misi. Definisi kontrak dan misi diambil dari valorant-api.com.
+     */
+    internal fun parseContracts(json: JsonObject, now: Long = System.currentTimeMillis()): ContractsOverview {
+        val defs = apiList("contracts").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        val progressById = json["Contracts"]?.jsonArray.orEmpty().map { it.jsonObject }
+            .associateBy { it.str("ContractDefinitionID")?.lowercase() }
+
+        fun progress(defId: String?): ContractProgress? {
+            val def = defs[defId?.lowercase()] ?: return null
+            val content = def["content"] as? JsonObject
+            val levels = content?.get("chapters")?.jsonArray.orEmpty()
+                .flatMap { (it.jsonObject["levels"] as? JsonArray).orEmpty() }
+                .map { it.jsonObject }
+            val p = progressById[defId?.lowercase()]
+            val reached = (p?.get("ProgressionLevelReached")?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, levels.size)
+            val next = levels.getOrNull(reached)
+            val agentIcon = if (content?.str("relationType") == "Agent") {
+                content.str("relationUuid")?.let { apiData("agents/$it") }?.str("displayIcon")
+            } else {
+                null
+            }
+            return ContractProgress(
+                id = def.str("uuid").orEmpty(),
+                name = def.str("displayName") ?: "Kontrak",
+                iconUrl = agentIcon ?: def.str("displayIcon"),
+                levelReached = reached,
+                totalLevels = levels.size,
+                xpIntoLevel = p?.get("ProgressionTowardsNextLevel")?.jsonPrimitive?.intOrNull ?: 0,
+                xpForNextLevel = next?.get("xp")?.jsonPrimitive?.intOrNull,
+                nextReward = (next?.get("reward") as? JsonObject)?.let(::reward),
+            )
+        }
+
+        val currentAct = apiList("seasons").map { it.jsonObject }.firstOrNull { season ->
+            season.str("type") == "EAresSeasonType::Act" &&
+                (parseInstant(season.str("startTime")) ?: Long.MAX_VALUE) <= now &&
+                now < (parseInstant(season.str("endTime")) ?: 0)
+        }?.str("uuid")
+        val battlePassId = defs.values.firstOrNull { def ->
+            val content = def["content"] as? JsonObject
+            content?.str("relationType") == "Season" && content.str("relationUuid").equals(currentAct, ignoreCase = true)
+        }?.str("uuid")
+
+        val missionDefs = apiList("missions").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        val missions = json["Missions"]?.jsonArray.orEmpty().map { it.jsonObject }.mapNotNull { m ->
+            val id = m.str("ID") ?: return@mapNotNull null
+            val def = missionDefs[id.lowercase()]
+            val target = def?.get("progressToComplete")?.jsonPrimitive?.intOrNull
+                ?: (def?.get("objectives") as? JsonArray)?.firstOrNull()?.jsonObject?.get("value")?.jsonPrimitive?.intOrNull
+                ?: 1
+            val progress = (m["Objectives"] as? JsonObject)?.values?.sumOf { it.jsonPrimitive.intOrNull ?: 0 } ?: 0
+            Mission(
+                id = id,
+                title = def?.str("title") ?: def?.str("displayName") ?: "Misi",
+                type = when (def?.str("type")) {
+                    "EAresMissionType::Daily" -> MissionType.DAILY
+                    "EAresMissionType::Weekly" -> MissionType.WEEKLY
+                    else -> MissionType.OTHER
+                },
+                progress = progress.coerceAtMost(target),
+                target = target,
+                xp = def?.get("xpGrant")?.jsonPrimitive?.intOrNull ?: 0,
+                complete = m["Complete"]?.jsonPrimitive?.booleanOrNull ?: (progress >= target),
+                expiresAtMillis = parseInstant(m.str("ExpirationTime"))?.takeIf { it > now },
+            )
+        }.sortedWith(compareBy<Mission>({ it.complete }, { it.type.ordinal }))
+
+        return ContractsOverview(
+            battlePass = progress(battlePassId),
+            agentContract = progress(json.str("ActiveSpecialContract")),
+            missions = missions,
+            weeklyRefillMillis = parseInstant((json["MissionMetadata"] as? JsonObject)?.str("WeeklyRefillTime"))?.takeIf { it > now },
+        )
+    }
+
+    private fun reward(r: JsonObject): ContractReward {
+        val id = r.str("uuid").orEmpty()
+        val amount = r["amount"]?.jsonPrimitive?.intOrNull ?: 1
+        val (path, iconKey) = when (r.str("type")) {
+            "EquippableSkinLevel" -> "weapons/skinlevels/$id" to "displayIcon"
+            "EquippableCharmLevel" -> "buddies/levels/$id" to "displayIcon"
+            "Spray" -> "sprays/$id" to "fullTransparentIcon"
+            "PlayerCard" -> "playercards/$id" to "largeArt"
+            "Title" -> "playertitles/$id" to ""
+            "Currency" -> "currencies/$id" to "displayIcon"
+            "Character" -> "agents/$id" to "displayIcon"
+            "Totem" -> "flex/$id" to "displayIcon"
+            else -> null to ""
+        }
+        val data = path?.let { apiData(it) }
+        val name = data?.str("titleText")
+            ?: (if (amount == 1) data?.str("displayNameSingular") else null)
+            ?: data?.str("displayName") ?: "Hadiah"
+        return ContractReward(
+            name = if (r.str("type") == "Currency") "${formatThousands(amount)} $name" else name,
+            iconUrl = data?.str(iconKey) ?: data?.str("displayIcon"),
+            amount = amount,
+        )
+    }
+
+    private fun formatThousands(n: Int) = java.text.NumberFormat.getIntegerInstance(java.util.Locale("id", "ID")).format(n)
+
+    /** ISO-8601 ke epoch millis; tanggal kosong Riot ("0001-01-01") dianggap tidak ada. */
+    private fun parseInstant(text: String?): Long? =
+        text?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }?.takeIf { it > 0 }
+
     internal class RawRank(val tier: Int, val rankedRating: Int?, val seasonId: String?)
 
     /**

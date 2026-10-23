@@ -183,3 +183,37 @@ data class Match(
     val teams: List<TeamScore>,
     val players: List<MatchPlayer>,
 )
+
+data class ContractReward(val name: String, val iconUrl: String?, val amount: Int)
+
+/** Progres satu kontrak (Battle Pass atau kontrak agent). [levelReached] = jumlah level yang sudah dibuka. */
+data class ContractProgress(
+    val id: String,
+    val name: String,
+    val iconUrl: String?,
+    val levelReached: Int,
+    val totalLevels: Int,
+    val xpIntoLevel: Int,
+    val xpForNextLevel: Int?,
+    val nextReward: ContractReward?,
+)
+
+enum class MissionType(val label: String) { DAILY("Harian"), WEEKLY("Mingguan"), OTHER("Lainnya") }
+
+data class Mission(
+    val id: String,
+    val title: String,
+    val type: MissionType,
+    val progress: Int,
+    val target: Int,
+    val xp: Int,
+    val complete: Boolean,
+    val expiresAtMillis: Long?,
+)
+
+data class ContractsOverview(
+    val battlePass: ContractProgress?,
+    val agentContract: ContractProgress?,
+    val missions: List<Mission>,
+    val weeklyRefillMillis: Long?,
+)

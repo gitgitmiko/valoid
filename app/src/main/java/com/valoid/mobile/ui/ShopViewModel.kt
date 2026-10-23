@@ -3,6 +3,7 @@ package com.valoid.mobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.valoid.mobile.data.BundleOffer
+import com.valoid.mobile.data.ContractsOverview
 import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryDay
@@ -45,6 +46,9 @@ data class ShopUiState(
     val matchesLoading: Boolean = false,
     val matchesError: String? = null,
     val matchesEnd: Boolean = false,
+    val contracts: ContractsOverview? = null,
+    val contractsLoading: Boolean = false,
+    val contractsError: String? = null,
 )
 
 data class DetailUiState(
@@ -255,6 +259,21 @@ class ShopViewModel(
                     val merged = (if (reset) page else st.matches + page).distinctBy { it.id }.sortedByDescending { it.startedAtMillis }
                     st.copy(matchesLoading = false, matches = merged, matchesEnd = page.size < MATCH_PAGE)
                 }
+            }
+        }
+    }
+
+    fun loadContracts() {
+        val s = session ?: return
+        _state.update { it.copy(contractsLoading = true, contractsError = null) }
+        viewModelScope.launch {
+            val result = runCatching { riot.loadContracts(s) }
+            _state.update {
+                it.copy(
+                    contractsLoading = false,
+                    contracts = result.getOrNull() ?: it.contracts,
+                    contractsError = result.exceptionOrNull()?.message,
+                )
             }
         }
     }
