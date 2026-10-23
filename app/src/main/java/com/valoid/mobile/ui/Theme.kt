@@ -1,6 +1,7 @@
 package com.valoid.mobile.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -16,5 +17,8 @@ private val Colors = darkColorScheme(
 
 @Composable
 fun ValoidTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Colors, content = content)
+    MaterialTheme(colorScheme = Colors) {
+        // Surface memberi warna teks bawaan (onBackground) untuk layar di luar Scaffold.
+        Surface(color = Colors.background, contentColor = Colors.onBackground, content = content)
+    }
 }

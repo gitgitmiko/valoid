@@ -198,12 +198,21 @@ class ShopViewModel(
         }
     }
 
+    /** Menghapus sesi dan cookie Riot dari perangkat tanpa keluar dari akun Valoid. */
     fun disconnectRiot() {
         session = null
+        autoConnectTried = true
         RiotAuth.clear()
+        _state.update { ShopUiState(region = it.region, history = it.history) }
+    }
+
+    /** Dipanggil saat keluar dari akun Valoid: hapus sesi Riot dan data milik pengguna sebelumnya. */
+    fun onSignOut() {
+        disconnectRiot()
+        autoConnectTried = false
         favoritesJob?.cancel()
         favoritesJob = null
         _favorites.value = emptyList()
-        _state.update { ShopUiState(region = it.region, history = it.history) }
+        _state.update { ShopUiState(region = it.region) }
     }
 }

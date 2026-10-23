@@ -10,15 +10,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.fragment.app.FragmentActivity
+import com.valoid.mobile.security.AppLock
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
@@ -34,16 +40,19 @@ private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"),
 
 @Composable
 fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
+    val context = LocalContext.current
     val user by authVm.user.collectAsStateWithLifecycle()
     val shop by shopVm.state.collectAsStateWithLifecycle()
     val detail by shopVm.detail.collectAsStateWithLifecycle()
     val bundle by shopVm.bundle.collectAsStateWithLifecycle()
     val favorites by shopVm.favorites.collectAsStateWithLifecycle()
     val skinCatalog by shopVm.skinCatalog.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var lockEnabled by remember { mutableStateOf(AppLock.isEnabled(context)) }
+    var settingsMessage by remember { mutableStateOf<String?>(null) }
 
     val uid = user?.uid
     if (uid == null) {
@@ -86,6 +95,44 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         if (inStore != null) shopVm.openDetail(inStore.first, inStore.second) else shopVm.openDetail(SkinOffer(id, name, iconUrl, 0), 0)
     }
 
+    if (showSettings) {
+        SettingsScreen(
+            email = user?.email,
+            riotConnected = shop.connected,
+            lockEnabled = lockEnabled,
+            lockAvailable = AppLock.isAvailable(context),
+            message = settingsMessage,
+            onToggleLock = { enable ->
+                val activity = context as? FragmentActivity ?: return@SettingsScreen
+                // Verifikasi dulu agar kunci tidak bisa dinyalakan/dimatikan tanpa pemilik HP.
+                AppLock.authenticate(
+                    activity,
+                    title = if (enable) "Aktifkan kunci aplikasi" else "Matikan kunci aplikasi",
+                    onSuccess = {
+                        AppLock.setEnabled(context, enable)
+                        lockEnabled = enable
+                        settingsMessage = if (enable) "Kunci aplikasi aktif." else "Kunci aplikasi dimatikan."
+                    },
+                    onFailure = { settingsMessage = it },
+                )
+            },
+            onDisconnectRiot = {
+                shopVm.disconnectRiot()
+                settingsMessage = "Akun Riot diputuskan dan cookie login dihapus."
+            },
+            onSignOut = {
+                showSettings = false
+                shopVm.onSignOut()
+                authVm.signOut()
+            },
+            onBack = {
+                showSettings = false
+                settingsMessage = null
+            },
+        )
+        return
+    }
+
     detail?.let {
         SkinDetailScreen(
             it,
@@ -122,10 +169,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(user?.email ?: "Valoid", Modifier.padding(top = 14.dp))
-                TextButton(onClick = {
-                    shopVm.disconnectRiot()
-                    authVm.signOut()
-                }) { Text("Keluar") }
+                IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "Pengaturan") }
             }
         },
         bottomBar = {
