@@ -252,6 +252,36 @@ data class ContractsOverview(
     val agentContract: ContractProgress?,
     val missions: List<Mission>,
     val weeklyRefillMillis: Long?,
+    /** Kontrak agent yang sedang berjalan (yang aktif lebih dulu). */
+    val agentContracts: List<ContractProgress> = emptyList(),
+    /** Misi mingguan yang sudah rilis tapi belum diterima karena misi minggu ini belum selesai. */
+    val queuedWeeklies: List<MissionPreview> = emptyList(),
+    val futureWeeklies: List<MissionPreview> = emptyList(),
+    val account: AccountXp? = null,
+)
+
+data class MissionPreview(val title: String, val target: Int, val xp: Int, val activatesAtMillis: Long?)
+
+data class XpSource(val id: String, val amount: Int) {
+    val label: String
+        get() = when (id) {
+            "time-played" -> "Waktu bermain"
+            "match-win" -> "Menang match"
+            "first-win-of-the-day" -> "Kemenangan pertama"
+            else -> id.replace('-', ' ').replaceFirstChar { it.uppercase() }
+        }
+}
+
+data class XpMatch(val startedAtMillis: Long, val total: Int, val sources: List<XpSource>)
+
+data class AccountXp(
+    val level: Int,
+    val xp: Int,
+    val xpPerLevel: Int,
+    /** True bila bonus kemenangan pertama hari ini sudah didapat. */
+    val firstWinClaimed: Boolean,
+    val firstWinAvailableAtMillis: Long?,
+    val recent: List<XpMatch>,
 )
 
 /** Item koleksi (kartu, spray, title, charm). */

@@ -448,7 +448,36 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
     }
 
     suspend fun loadContracts(session: RiotSession): ContractsOverview = withContext(Dispatchers.IO) {
-        parseContracts(get(pd(session, "contracts/v1/contracts/${session.puuid}").build()).jsonObject)
+        coroutineScope {
+            val xp = async { runCatching { parseAccountXp(get(pd(session, "account-xp/v1/players/${session.puuid}").build()).jsonObject) }.getOrNull() }
+            val contracts = parseContracts(get(pd(session, "contracts/v1/contracts/${session.puuid}").build()).jsonObject)
+            contracts.copy(account = xp.await())
+        }
+    }
+
+    /** Level akun, XP, status kemenangan pertama, dan XP 10 match terakhir dari `account-xp`. */
+    internal fun parseAccountXp(json: JsonObject, now: Long = System.currentTimeMillis()): AccountXp {
+        val progress = json["Progress"] as? JsonObject
+        val nextFirstWin = parseInstant(json.str("NextTimeFirstWinAvailable"))
+        return AccountXp(
+            level = progress?.get("Level")?.jsonPrimitive?.intOrNull ?: 0,
+            xp = progress?.get("XP")?.jsonPrimitive?.intOrNull ?: 0,
+            xpPerLevel = 5000,
+            firstWinClaimed = nextFirstWin != null && nextFirstWin > now,
+            firstWinAvailableAtMillis = nextFirstWin?.takeIf { it > now },
+            recent = (json["History"] as? JsonArray).orEmpty().map { it.jsonObject }.map { h ->
+                val sources = (h["XPSources"] as? JsonArray).orEmpty().mapNotNull { s ->
+                    val o = s.jsonObject
+                    val amount = o["Amount"]?.jsonPrimitive?.intOrNull ?: return@mapNotNull null
+                    XpSource(o.str("ID").orEmpty(), amount)
+                }.filter { it.amount != 0 }
+                XpMatch(
+                    startedAtMillis = parseInstant(h.str("MatchStart")) ?: 0,
+                    total = h["XPDelta"]?.jsonPrimitive?.intOrNull ?: sources.sumOf { it.amount },
+                    sources = sources,
+                )
+            }.sortedByDescending { it.startedAtMillis }.take(10),
+        )
     }
 
     /**
@@ -520,11 +549,44 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             )
         }.sortedWith(compareBy<Mission>({ it.complete }, { it.type.ordinal }))
 
+        // Misi mingguan yang sudah dirilis setelah checkpoint terakhir pemain tapi belum diterima,
+        // dan misi mingguan yang baru rilis nanti.
+        val metadata = json["MissionMetadata"] as? JsonObject
+        val checkpoint = parseInstant(metadata?.str("WeeklyCheckpoint"))
+        val activeIds = missions.map { it.id.lowercase() }.toSet()
+        val weeklyDefs = missionDefs.values.filter { it.str("type") == "EAresMissionType::Weekly" }
+            .mapNotNull { d ->
+                val start = parseInstant(d.str("activationDate")) ?: return@mapNotNull null
+                val end = parseInstant(d.str("expirationDate"))
+                if (end != null && end <= now) return@mapNotNull null
+                Triple(d, start, d.str("uuid")?.lowercase())
+            }
+            .filter { it.third !in activeIds }
+            .sortedBy { it.second }
+        fun preview(d: JsonObject, start: Long) = MissionPreview(
+            title = d.str("title") ?: "Misi",
+            target = d["progressToComplete"]?.jsonPrimitive?.intOrNull ?: 1,
+            xp = d["xpGrant"]?.jsonPrimitive?.intOrNull ?: 0,
+            activatesAtMillis = start,
+        )
+        val queued = if (checkpoint == null) emptyList() else weeklyDefs.filter { it.second in (checkpoint + 1)..now }.map { preview(it.first, it.second) }
+        val future = weeklyDefs.filter { it.second > now }.map { preview(it.first, it.second) }
+
+        val activeAgent = json.str("ActiveSpecialContract")?.lowercase()
+        val agentContracts = progressById.keys.filterNotNull().filter { id ->
+            (defs[id]?.get("content") as? JsonObject)?.str("relationType") == "Agent"
+        }.mapNotNull { progress(it) }
+            .filter { it.id.lowercase() == activeAgent || ((it.levelReached > 0 || it.xpIntoLevel > 0) && it.levelReached < it.totalLevels) }
+            .sortedByDescending { it.id.lowercase() == activeAgent }
+
         return ContractsOverview(
             battlePass = progress(battlePassId),
-            agentContract = progress(json.str("ActiveSpecialContract")),
+            agentContract = progress(activeAgent),
             missions = missions,
-            weeklyRefillMillis = parseInstant((json["MissionMetadata"] as? JsonObject)?.str("WeeklyRefillTime"))?.takeIf { it > now },
+            weeklyRefillMillis = parseInstant(metadata?.str("WeeklyRefillTime"))?.takeIf { it > now },
+            agentContracts = agentContracts,
+            queuedWeeklies = queued,
+            futureWeeklies = future,
         )
     }
 
