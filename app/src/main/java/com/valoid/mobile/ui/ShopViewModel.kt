@@ -9,6 +9,9 @@ import com.valoid.mobile.data.RiotException
 import com.valoid.mobile.data.RiotRegion
 import com.valoid.mobile.data.RiotRepository
 import com.valoid.mobile.data.RiotSession
+import com.valoid.mobile.data.SkinCatalogRepository
+import com.valoid.mobile.data.SkinDetail
+import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.data.Storefront
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +30,14 @@ data class ShopUiState(
     val historyError: String? = null,
 )
 
+data class DetailUiState(
+    val offer: SkinOffer,
+    val endsAtMillis: Long,
+    val detail: SkinDetail? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+)
+
 /**
  * Token Riot hanya disimpan di memori. Saat aplikasi dibuka lagi atau token kedaluwarsa, token baru
  * diminta memakai cookie sesi Riot di perangkat (lihat [RiotRepository.reauthenticate]).
@@ -34,7 +45,26 @@ data class ShopUiState(
 class ShopViewModel(
     private val riot: RiotRepository = RiotRepository(),
     private val history: HistoryRepository = HistoryRepository(),
+    private val catalog: SkinCatalogRepository = SkinCatalogRepository(),
 ) : ViewModel() {
+
+    private val _detail = MutableStateFlow<DetailUiState?>(null)
+    val detail: StateFlow<DetailUiState?> = _detail
+
+    fun openDetail(offer: SkinOffer, endsAtMillis: Long) {
+        _detail.value = DetailUiState(offer, endsAtMillis)
+        viewModelScope.launch {
+            val result = runCatching { catalog.detail(offer.id) }
+            _detail.update { current ->
+                if (current?.offer?.id != offer.id) return@update current
+                current.copy(loading = false, detail = result.getOrNull(), error = result.exceptionOrNull()?.message)
+            }
+        }
+    }
+
+    fun closeDetail() {
+        _detail.value = null
+    }
 
     private val _state = MutableStateFlow(ShopUiState())
     val state: StateFlow<ShopUiState> = _state

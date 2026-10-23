@@ -19,21 +19,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.RiotRegion
 import com.valoid.mobile.data.SkinOffer
-
-private fun formatDuration(seconds: Long): String {
-    val h = seconds / 3600
-    val m = seconds % 3600 / 60
-    return if (h >= 24) "${h / 24}h ${h % 24}j" else "${h}j ${m}m"
-}
 
 @Composable
 fun ConnectRiotPrompt(
@@ -72,11 +68,19 @@ fun OfferListScreen(
     title: String,
     emptyText: String,
     offers: List<SkinOffer>,
-    remainingSeconds: Long,
+    endsAtMillis: Long,
     loading: Boolean,
     error: String?,
     onRefresh: () -> Unit,
+    onOfferClick: (SkinOffer) -> Unit,
 ) {
+    val secondsLeft = rememberSecondsLeft(endsAtMillis)
+    // Muat ulang otomatis begitu toko berganti.
+    LaunchedEffect(endsAtMillis, offers.isNotEmpty()) {
+        if (offers.isEmpty()) return@LaunchedEffect
+        delay((endsAtMillis - System.currentTimeMillis()).coerceAtLeast(0) + 3000)
+        onRefresh()
+    }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(
             Modifier
@@ -87,7 +91,7 @@ fun OfferListScreen(
         ) {
             Column {
                 Text(title, style = MaterialTheme.typography.titleLarge)
-                if (offers.isNotEmpty()) Text("Reset dalam ${formatDuration(remainingSeconds)}")
+                if (offers.isNotEmpty()) Text("Reset dalam ${formatCountdown(secondsLeft)}")
             }
             OutlinedButton(onClick = onRefresh, enabled = !loading) { Text("Muat ulang") }
         }
@@ -97,7 +101,7 @@ fun OfferListScreen(
                 loading && offers.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 offers.isEmpty() -> Text(emptyText, Modifier.align(Alignment.Center))
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(offers, key = { it.id }) { SkinCard(it) }
+                    items(offers, key = { it.id }) { SkinCard(it, onClick = { onOfferClick(it) }) }
                 }
             }
         }
@@ -105,8 +109,8 @@ fun OfferListScreen(
 }
 
 @Composable
-private fun SkinCard(offer: SkinOffer) {
-    Card(Modifier.fillMaxWidth()) {
+private fun SkinCard(offer: SkinOffer, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = offer.iconUrl,

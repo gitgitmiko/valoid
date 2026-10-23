@@ -28,6 +28,25 @@ data class Storefront(
     val dailyRemainingSeconds: Long,
     val nightMarket: List<SkinOffer>,
     val nightMarketRemainingSeconds: Long,
+    val fetchedAtMillis: Long = System.currentTimeMillis(),
+) {
+    val dailyEndsAtMillis: Long get() = fetchedAtMillis + dailyRemainingSeconds * 1000
+    val nightMarketEndsAtMillis: Long get() = fetchedAtMillis + nightMarketRemainingSeconds * 1000
+}
+
+data class SkinTier(val name: String, val iconUrl: String?, val color: Long?)
+
+data class SkinChroma(val name: String, val swatchUrl: String?, val imageUrl: String?, val videoUrl: String?)
+
+data class SkinLevel(val number: Int, val feature: String?, val videoUrl: String?)
+
+data class SkinDetail(
+    val levelId: String,
+    val name: String,
+    val imageUrl: String?,
+    val tier: SkinTier?,
+    val chromas: List<SkinChroma>,
+    val levels: List<SkinLevel>,
 )
 
 data class HistoryDay(val date: String, val offers: List<SkinOffer>)

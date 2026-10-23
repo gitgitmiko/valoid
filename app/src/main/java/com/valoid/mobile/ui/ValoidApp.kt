@@ -27,6 +27,7 @@ private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"),
 fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
     val user by authVm.user.collectAsStateWithLifecycle()
     val shop by shopVm.state.collectAsStateWithLifecycle()
+    val detail by shopVm.detail.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
 
@@ -48,6 +49,11 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     LaunchedEffect(uid) { shopVm.autoConnect(uid) }
+
+    detail?.let {
+        SkinDetailScreen(it, onBack = shopVm::closeDetail)
+        return
+    }
 
     LaunchedEffect(tab, uid) {
         if (tab == Tab.HISTORY) shopVm.loadHistory(uid)
@@ -94,19 +100,21 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     title = "Toko harian",
                     emptyText = "Toko kosong.",
                     offers = shop.storefront?.daily.orEmpty(),
-                    remainingSeconds = shop.storefront?.dailyRemainingSeconds ?: 0,
+                    endsAtMillis = shop.storefront?.dailyEndsAtMillis ?: 0,
                     loading = shop.loading,
                     error = shop.error,
                     onRefresh = { shopVm.refresh(uid) },
+                    onOfferClick = { shopVm.openDetail(it, shop.storefront?.dailyEndsAtMillis ?: 0) },
                 )
                 else -> OfferListScreen(
                     title = "Night Market",
                     emptyText = "Night Market sedang tidak aktif.",
                     offers = shop.storefront?.nightMarket.orEmpty(),
-                    remainingSeconds = shop.storefront?.nightMarketRemainingSeconds ?: 0,
+                    endsAtMillis = shop.storefront?.nightMarketEndsAtMillis ?: 0,
                     loading = shop.loading,
                     error = shop.error,
                     onRefresh = { shopVm.refresh(uid) },
+                    onOfferClick = { shopVm.openDetail(it, shop.storefront?.nightMarketEndsAtMillis ?: 0) },
                 )
             }
         }
