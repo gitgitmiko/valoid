@@ -557,6 +557,107 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
     private fun parseInstant(text: String?): Long? =
         text?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }?.takeIf { it > 0 }
 
+    /** Loadout yang terpasang dan semua item yang dimiliki pemain. */
+    suspend fun loadCollection(session: RiotSession): PlayerCollection = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val loadout = async {
+                try {
+                    get(pd(session, "personalization/v2/players/${session.puuid}/playerloadout").build())
+                } catch (e: RiotException) {
+                    if (e.sessionExpired) throw e
+                    get(pd(session, "personalization/v3/players/${session.puuid}/playerloadout").build())
+                }.jsonObject
+            }
+            val owned = listOf(TYPE_SKIN, TYPE_CARD, TYPE_SPRAY, TYPE_TITLE, TYPE_BUDDY).associateWith { type ->
+                async { runCatching { entitlements(session, type) }.getOrDefault(emptyList()) }
+            }
+            parseCollection(loadout.await(), owned.mapValues { it.value.await() })
+        }
+    }
+
+    private fun entitlements(session: RiotSession, typeId: String): List<String> =
+        get(pd(session, "store/v1/entitlements/${session.puuid}/$typeId").build())
+            .jsonObject["Entitlements"]?.jsonArray.orEmpty()
+            .mapNotNull { it.jsonObject.str("ItemID")?.lowercase() }
+
+    /** [owned] berisi ID item yang dimiliki per ItemTypeID (huruf kecil). */
+    internal fun parseCollection(loadout: JsonObject, owned: Map<String, List<String>>): PlayerCollection {
+        val identity = loadout["Identity"] as? JsonObject
+        val cardId = identity?.str("PlayerCardID")?.lowercase()
+        val titleId = identity?.str("PlayerTitleID")?.lowercase()
+        val card = cardId?.let { apiData("playercards/$it") }
+
+        val sprayDefs = apiList("sprays").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        fun spray(id: String?, equipped: Boolean) = sprayDefs[id?.lowercase()]?.let {
+            CollectionItem(id!!.lowercase(), it.str("displayName") ?: "Spray", it.str("fullTransparentIcon") ?: it.str("displayIcon"), equipped)
+        }
+        val equippedSprayIds = loadout["Sprays"]?.jsonArray.orEmpty().mapNotNull { it.jsonObject.str("SprayID")?.lowercase() }
+
+        val buddyLevels = apiList("buddies/levels").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        // Nama level buddy sering berupa kode internal ("RankEP4_Iron"); pakai nama buddy induknya.
+        val buddyNames = apiList("buddies").map { it.jsonObject }.flatMap { b ->
+            (b["levels"] as? JsonArray).orEmpty().mapNotNull { l -> l.jsonObject.str("uuid")?.lowercase()?.let { it to b.str("displayName") } }
+        }.toMap()
+        fun buddyName(levelId: String?) = levelId?.lowercase()?.let { id -> buddyNames[id] ?: buddyLevels[id]?.str("displayName") }
+        val guns = loadout["Guns"]?.jsonArray.orEmpty().map { it.jsonObject }.associateBy { it.str("ID")?.lowercase() }
+        val equippedBuddyIds = guns.values.mapNotNull { it.str("CharmLevelID")?.lowercase() }.toSet()
+
+        // Peta level/chroma skin -> data skin, dari daftar senjata valorant-api.
+        val weapons = apiList("weapons").map { it.jsonObject }
+        val skinByLevel = HashMap<String, JsonObject>()
+        weapons.forEach { w ->
+            (w["skins"] as? JsonArray).orEmpty().forEach { sk ->
+                val skin = sk.jsonObject
+                (skin["levels"] as? JsonArray).orEmpty().forEach { lv -> lv.jsonObject.str("uuid")?.let { skinByLevel[it.lowercase()] = skin } }
+            }
+        }
+        val equipped = weapons.mapNotNull { w ->
+            val gun = guns[w.str("uuid")?.lowercase()] ?: return@mapNotNull null
+            val skin = (w["skins"] as? JsonArray).orEmpty().map { it.jsonObject }
+                .firstOrNull { it.str("uuid").equals(gun.str("SkinID"), ignoreCase = true) }
+            val chroma = (skin?.get("chromas") as? JsonArray).orEmpty().map { it.jsonObject }
+                .firstOrNull { it.str("uuid").equals(gun.str("ChromaID"), ignoreCase = true) }
+            val level = (skin?.get("levels") as? JsonArray).orEmpty().map { it.jsonObject }
+                .firstOrNull { it.str("uuid").equals(gun.str("SkinLevelID"), ignoreCase = true) }
+            val buddy = buddyLevels[gun.str("CharmLevelID")?.lowercase()]
+            EquippedWeapon(
+                weaponName = w.str("displayName") ?: "Senjata",
+                skinLevelId = (skin?.get("levels") as? JsonArray)?.firstOrNull()?.jsonObject?.str("uuid"),
+                skinName = skin?.str("displayName") ?: w.str("displayName") ?: "Standard",
+                imageUrl = chroma?.str("fullRender") ?: level?.str("displayIcon") ?: skin?.str("displayIcon") ?: w.str("displayIcon"),
+                buddyName = buddyName(gun.str("CharmLevelID")),
+                buddyIcon = buddy?.str("displayIcon"),
+            )
+        }
+
+        val cardDefs = apiList("playercards").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        val titleDefs = apiList("playertitles").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        val ownedCards = (owned[TYPE_CARD].orEmpty() + listOfNotNull(cardId)).distinct()
+        val ownedTitles = (owned[TYPE_TITLE].orEmpty() + listOfNotNull(titleId)).distinct()
+        val ownedSprays = (owned[TYPE_SPRAY].orEmpty() + equippedSprayIds).distinct()
+
+        return PlayerCollection(
+            cardName = card?.str("displayName"),
+            cardWideArt = card?.str("wideArt"),
+            title = titleId?.let { titleDefs[it] }?.str("titleText"),
+            equippedSprays = equippedSprayIds.map { spray(it, true) },
+            weapons = equipped,
+            ownedSkins = owned[TYPE_SKIN].orEmpty().mapNotNull { skinByLevel[it]?.str("uuid") }.distinct().size,
+            cards = ownedCards.mapNotNull { id ->
+                cardDefs[id]?.let { CollectionItem(id, it.str("displayName") ?: "Kartu", it.str("largeArt") ?: it.str("displayIcon"), id == cardId) }
+            }.sortedWith(compareByDescending<CollectionItem> { it.equipped }.thenBy { it.name }),
+            sprays = ownedSprays.mapNotNull { spray(it, it in equippedSprayIds) }
+                .sortedWith(compareByDescending<CollectionItem> { it.equipped }.thenBy { it.name }),
+            titles = ownedTitles.mapNotNull { id ->
+                titleDefs[id]?.str("titleText")?.let { CollectionItem(id, it, null, id == titleId) }
+            }.sortedWith(compareByDescending<CollectionItem> { it.equipped }.thenBy { it.name }),
+            charms = owned[TYPE_BUDDY].orEmpty().distinct().mapNotNull { id ->
+                buddyLevels[id]?.let { CollectionItem(id, buddyName(id) ?: "Charm", it.str("displayIcon"), id in equippedBuddyIds) }
+            }.sortedWith(compareByDescending<CollectionItem> { it.equipped }.thenBy { it.name }),
+            charmsTotal = buddyLevels.size,
+        )
+    }
+
     internal class RawRank(val tier: Int, val rankedRating: Int?, val seasonId: String?)
 
     /**
@@ -736,6 +837,11 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
 
     private companion object {
         val JSON = "application/json".toMediaType()
+        const val TYPE_SKIN = "e7c63390-eda7-46e0-bb7a-a6abdacd2433"
+        const val TYPE_CARD = "3f296c07-64c3-494c-923b-fe692a4fa1bd"
+        const val TYPE_SPRAY = "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475"
+        const val TYPE_TITLE = "de7caa6b-adf7-4588-bbd1-143831e786c6"
+        const val TYPE_BUDDY = "dd3bf334-87f3-40bd-b043-682a57a8dc3a"
         const val CURRENCY_VP = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741"
         const val CURRENCY_KINGDOM = "85ca954a-41f2-ce94-9b45-8ca3dd39a00d"
         const val CURRENCY_RADIANITE = "e59aa87c-4cbf-517a-5983-6e81511be9b7"

@@ -8,6 +8,7 @@ import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.Match
+import com.valoid.mobile.data.PlayerCollection
 import com.valoid.mobile.data.PlayerProfile
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
@@ -49,6 +50,9 @@ data class ShopUiState(
     val contracts: ContractsOverview? = null,
     val contractsLoading: Boolean = false,
     val contractsError: String? = null,
+    val collection: PlayerCollection? = null,
+    val collectionLoading: Boolean = false,
+    val collectionError: String? = null,
 )
 
 data class DetailUiState(
@@ -273,6 +277,21 @@ class ShopViewModel(
                     contractsLoading = false,
                     contracts = result.getOrNull() ?: it.contracts,
                     contractsError = result.exceptionOrNull()?.message,
+                )
+            }
+        }
+    }
+
+    fun loadCollection() {
+        val s = session ?: return
+        _state.update { it.copy(collectionLoading = true, collectionError = null) }
+        viewModelScope.launch {
+            val result = runCatching { riot.loadCollection(s) }
+            _state.update {
+                it.copy(
+                    collectionLoading = false,
+                    collection = result.getOrNull() ?: it.collection,
+                    collectionError = result.exceptionOrNull()?.message,
                 )
             }
         }

@@ -253,3 +253,31 @@ data class ContractsOverview(
     val missions: List<Mission>,
     val weeklyRefillMillis: Long?,
 )
+
+/** Item koleksi (kartu, spray, title, charm). */
+data class CollectionItem(val id: String, val name: String, val imageUrl: String?, val equipped: Boolean)
+
+data class EquippedWeapon(
+    val weaponName: String,
+    /** UUID level skin yang dipakai, untuk membuka detail skin. */
+    val skinLevelId: String?,
+    val skinName: String,
+    val imageUrl: String?,
+    val buddyName: String?,
+    val buddyIcon: String?,
+)
+
+data class PlayerCollection(
+    val cardName: String?,
+    val cardWideArt: String?,
+    val title: String?,
+    /** Spray terpasang sesuai slot; null bila slot kosong. */
+    val equippedSprays: List<CollectionItem?>,
+    val weapons: List<EquippedWeapon>,
+    val ownedSkins: Int,
+    val cards: List<CollectionItem>,
+    val sprays: List<CollectionItem>,
+    val titles: List<CollectionItem>,
+    val charms: List<CollectionItem>,
+    val charmsTotal: Int,
+)

@@ -1,6 +1,7 @@
 package com.valoid.mobile.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ fun ProfileScreen(
     onRefresh: () -> Unit,
     onOpenMatches: () -> Unit,
     onOpenContracts: () -> Unit,
+    onOpenLoadout: () -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -60,7 +62,7 @@ fun ProfileScreen(
                 }
             }
             else -> {
-                item { ProfileHeader(profile) }
+                item { ProfileHeader(profile, onOpenLoadout) }
                 item { RankCard(profile.currentRank, profile.peakRank) }
                 item { MenuRow("Riwayat match", "Hasil, skor, K/D/A, dan papan skor tiap match", onOpenMatches) }
                 item { MenuRow("Kontrak & misi", "Progres Battle Pass, kontrak agent, dan misi harian/mingguan", onOpenContracts) }
@@ -75,16 +77,20 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileHeader(profile: PlayerProfile) {
+private fun ProfileHeader(profile: PlayerProfile, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(452f / 128f * 0.62f) // banner wideArt, sedikit lebih tinggi agar teks muat
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface),
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick),
     ) {
         AsyncImage(profile.cardWideArt, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))))
+        Surface(shape = RoundedCornerShape(50), color = Color.Black.copy(alpha = 0.55f), modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+            Text("Loadout ›", color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+        }
         Row(
             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
