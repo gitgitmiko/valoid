@@ -3,6 +3,7 @@ package com.valoid.mobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.valoid.mobile.data.BundleOffer
+import com.valoid.mobile.data.CareerSummary
 import com.valoid.mobile.data.ContractsOverview
 import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
@@ -53,6 +54,9 @@ data class ShopUiState(
     val collection: PlayerCollection? = null,
     val collectionLoading: Boolean = false,
     val collectionError: String? = null,
+    val career: CareerSummary? = null,
+    val careerLoading: Boolean = false,
+    val careerError: String? = null,
 )
 
 data class DetailUiState(
@@ -293,6 +297,17 @@ class ShopViewModel(
                     collection = result.getOrNull() ?: it.collection,
                     collectionError = result.exceptionOrNull()?.message,
                 )
+            }
+        }
+    }
+
+    fun loadCareer() {
+        val s = session ?: return
+        _state.update { it.copy(careerLoading = true, careerError = null) }
+        viewModelScope.launch {
+            val result = runCatching { riot.loadCareer(s) }
+            _state.update {
+                it.copy(careerLoading = false, career = result.getOrNull() ?: it.career, careerError = result.exceptionOrNull()?.message)
             }
         }
     }

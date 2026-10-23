@@ -45,6 +45,7 @@ fun ProfileScreen(
     onOpenMatches: () -> Unit,
     onOpenContracts: () -> Unit,
     onOpenLoadout: () -> Unit,
+    onOpenCareer: () -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -63,7 +64,7 @@ fun ProfileScreen(
             }
             else -> {
                 item { ProfileHeader(profile, onOpenLoadout) }
-                item { RankCard(profile.currentRank, profile.peakRank) }
+                item { RankCard(profile.currentRank, profile.peakRank, onOpenCareer) }
                 item { MenuRow("Riwayat match", "Hasil, skor, K/D/A, dan papan skor tiap match", onOpenMatches) }
                 item { MenuRow("Kontrak & misi", "Progres Battle Pass, kontrak agent, dan misi harian/mingguan", onOpenContracts) }
                 item {
@@ -120,8 +121,8 @@ private fun ProfileHeader(profile: PlayerProfile, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RankCard(current: RankInfo?, peak: RankInfo?) {
-    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+private fun RankCard(current: RankInfo?, peak: RankInfo?, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(vertical = 20.dp, horizontal = 8.dp), verticalAlignment = Alignment.Top) {
             RankColumn(current, caption = current?.rankedRating?.let { "$it RR" } ?: "Belum ber-rank", showProgress = true, modifier = Modifier.weight(1f))
             Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))

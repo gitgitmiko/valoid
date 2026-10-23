@@ -681,6 +681,51 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         )
     }
 
+    suspend fun loadCareer(session: RiotSession): CareerSummary = withContext(Dispatchers.IO) {
+        parseCareer(get(pd(session, "mmr/v1/players/${session.puuid}").build()).jsonObject)
+    }
+
+    /** Statistik per mode per act dari `QueueSkills` di respons mmr. */
+    internal fun parseCareer(mmr: JsonObject, now: Long = System.currentTimeMillis()): CareerSummary {
+        val seasons = apiList("seasons").map { it.jsonObject }
+        val byId = seasons.associateBy { it.str("uuid")?.lowercase() }
+        fun label(id: String): String {
+            val act = byId[id.lowercase()] ?: return "Act tidak dikenal"
+            val episode = act.str("parentUuid")?.lowercase()?.let { byId[it] }
+            return listOfNotNull(episode?.str("displayName"), act.str("displayName")).joinToString(" // ")
+        }
+        val current = seasons.firstOrNull { s ->
+            s.str("type") == "EAresSeasonType::Act" &&
+                (parseInstant(s.str("startTime")) ?: Long.MAX_VALUE) <= now && now < (parseInstant(s.str("endTime")) ?: 0)
+        }?.str("uuid")?.lowercase()
+
+        val queues = (mmr["QueueSkills"] as? JsonObject).orEmpty().mapNotNull { (queueId, value) ->
+            val seasonal = ((value as? JsonObject)?.get("SeasonalInfoBySeasonID") as? JsonObject).orEmpty()
+            val acts = seasonal.mapNotNull { (seasonId, info) ->
+                val o = info as? JsonObject ?: return@mapNotNull null
+                val games = o["NumberOfGames"]?.jsonPrimitive?.intOrNull ?: 0
+                if (games <= 0) return@mapNotNull null
+                val wins = o["NumberOfWinsWithPlacements"]?.jsonPrimitive?.intOrNull ?: o["NumberOfWins"]?.jsonPrimitive?.intOrNull ?: 0
+                val tier = o["CompetitiveTier"]?.jsonPrimitive?.intOrNull ?: 0
+                ActStats(
+                    seasonId = seasonId.lowercase(),
+                    label = label(seasonId),
+                    startMillis = parseInstant(byId[seasonId.lowercase()]?.str("startTime")) ?: 0,
+                    games = games,
+                    wins = wins,
+                    rank = if (queueId == "competitive" && tier > 2) {
+                        rankInfo(RawRank(tier, o["RankedRating"]?.jsonPrimitive?.intOrNull, seasonId))
+                    } else {
+                        null
+                    },
+                )
+            }.sortedByDescending { it.startMillis }
+            if (acts.isEmpty()) null else QueueCareer(queueId, queueName(queueId, null), acts)
+        }.sortedWith(compareByDescending<QueueCareer> { it.queueId == "competitive" }.thenByDescending { it.games })
+
+        return CareerSummary(current, current?.let(::label), queues)
+    }
+
     internal class RawRank(val tier: Int, val rankedRating: Int?, val seasonId: String?)
 
     /**

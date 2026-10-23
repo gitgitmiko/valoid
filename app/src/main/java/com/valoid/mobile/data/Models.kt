@@ -281,3 +281,22 @@ data class PlayerCollection(
     val charms: List<CollectionItem>,
     val charmsTotal: Int,
 )
+
+data class ActStats(
+    val seasonId: String,
+    val label: String,
+    val startMillis: Long,
+    val games: Int,
+    val wins: Int,
+    /** Rank akhir di act ini; hanya untuk mode kompetitif. */
+    val rank: RankInfo?,
+) {
+    val winRate: Double get() = if (games > 0) wins * 100.0 / games else 0.0
+}
+
+data class QueueCareer(val queueId: String, val name: String, val acts: List<ActStats>) {
+    val games: Int get() = acts.sumOf { it.games }
+    val wins: Int get() = acts.sumOf { it.wins }
+}
+
+data class CareerSummary(val currentActId: String?, val currentActLabel: String?, val queues: List<QueueCareer>)

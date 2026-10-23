@@ -54,6 +54,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var showMatches by rememberSaveable { mutableStateOf(false) }
     var showContracts by rememberSaveable { mutableStateOf(false) }
     var showLoadout by rememberSaveable { mutableStateOf(false) }
+    var showCareer by rememberSaveable { mutableStateOf(false) }
     val openMatch by shopVm.openMatch.collectAsStateWithLifecycle()
     var lockEnabled by remember { mutableStateOf(AppLock.isEnabled(context)) }
     var settingsMessage by remember { mutableStateOf<String?>(null) }
@@ -189,6 +190,18 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         return
     }
 
+    if (showCareer) {
+        LaunchedEffect(Unit) { shopVm.loadCareer() }
+        CareerScreen(
+            career = shop.career,
+            loading = shop.careerLoading,
+            error = shop.careerError,
+            onRefresh = shopVm::loadCareer,
+            onBack = { showCareer = false },
+        )
+        return
+    }
+
     if (showLoadout) {
         LaunchedEffect(Unit) { if (shop.collection == null) shopVm.loadCollection() }
         LoadoutFlow(
@@ -256,6 +269,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     onOpenMatches = { showMatches = true },
                     onOpenContracts = { showContracts = true },
                     onOpenLoadout = { showLoadout = true },
+                    onOpenCareer = { showCareer = true },
                 )
                 tab == Tab.SHOP -> OfferListScreen(
                     title = "Toko harian",
