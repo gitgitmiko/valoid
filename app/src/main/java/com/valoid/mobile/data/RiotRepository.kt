@@ -248,24 +248,53 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
 
         // Dibatasi beberapa sekaligus agar tidak terkena rate limit Riot.
         val gate = kotlinx.coroutines.sync.Semaphore(4)
-        coroutineScope {
-            history.map { id ->
+        val raw = coroutineScope {
+            history.filterNot { matchCache.containsKey(it) }.map { id ->
                 async {
-                    matchCache[id] ?: gate.withPermit {
-                        runCatching {
-                            parseMatch(get(pd(session, "match-details/v1/matches/$id").build()).jsonObject, session.puuid, rrByMatch[id])
-                        }.getOrNull()
-                    }?.also {
-                        // Jangan simpan hasil yang data map-nya gagal dimuat dari valorant-api.
-                        if (it.mapImage != null) matchCache[id] = it
+                    gate.withPermit {
+                        runCatching { id to get(pd(session, "match-details/v1/matches/$id").build()).jsonObject }.getOrNull()
                     }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll().filterNotNull().toMap()
+        }
+
+        // match-details sering tidak menyertakan nama; ambil sekaligus lewat name-service.
+        val unnamed = raw.values.flatMap { m ->
+            m["players"]?.jsonArray.orEmpty().map { it.jsonObject }
+                .filter { it.str("gameName").isNullOrBlank() }
+                .mapNotNull { it.str("subject") }
+        }.distinct()
+        val names = runCatching { playerNames(session, unnamed) }.getOrDefault(emptyMap())
+
+        history.mapNotNull { id ->
+            matchCache[id] ?: raw[id]?.let { json ->
+                runCatching { parseMatch(json, session.puuid, rrByMatch[id], names) }.getOrNull()
+            }?.also {
+                // Jangan simpan hasil yang data map-nya gagal dimuat dari valorant-api.
+                if (it.mapImage != null) matchCache[id] = it
+            }
         }
     }
 
+    /** Riot ID (nama, tag) untuk daftar PUUID, dikunci PUUID huruf kecil. */
+    private fun playerNames(session: RiotSession, puuids: List<String>): Map<String, Pair<String, String?>> =
+        puuids.chunked(50).flatMap { chunk ->
+            val body = chunk.joinToString(",", "[", "]") { "\"$it\"" }
+            get(pd(session, "name-service/v2/players").put(body.toRequestBody(JSON)).build()).jsonArray.mapNotNull { e ->
+                val o = e.jsonObject
+                val id = o.str("Subject") ?: return@mapNotNull null
+                val name = o.str("GameName")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                id.lowercase() to (name to o.str("TagLine"))
+            }
+        }.toMap()
+
     /** Mengubah respons `match-details` menjadi [Match] dari sudut pandang pemain [puuid]. */
-    internal fun parseMatch(json: JsonObject, puuid: String, rrChange: Int?): Match {
+    internal fun parseMatch(
+        json: JsonObject,
+        puuid: String,
+        rrChange: Int?,
+        names: Map<String, Pair<String, String?>> = emptyMap(),
+    ): Match {
         val info = json["matchInfo"]!!.jsonObject
         val seasonId = info.str("seasonId")
         val map = apiList("maps").map { it.jsonObject }.firstOrNull { it.str("mapUrl").equals(info.str("mapId"), ignoreCase = true) }
@@ -301,8 +330,8 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             val rank = if (tier > 2) rankInfo(RawRank(tier, null, seasonId)) else null
             MatchPlayer(
                 puuid = p.str("subject").orEmpty(),
-                name = p.str("gameName") ?: "Pemain",
-                tag = p.str("tagLine"),
+                name = p.str("gameName")?.takeIf { it.isNotBlank() } ?: names[p.str("subject")?.lowercase()]?.first ?: "Pemain",
+                tag = p.str("tagLine")?.takeIf { it.isNotBlank() } ?: names[p.str("subject")?.lowercase()]?.second,
                 teamId = p.str("teamId").orEmpty(),
                 agentName = agent?.str("displayName"),
                 agentIcon = agent?.str("displayIconSmall") ?: agent?.str("displayIcon"),
@@ -370,18 +399,26 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
                     myKills = (mine?.get("kills") as? JsonArray)?.size ?: 0,
                     mySpent = economy?.get("spent")?.jsonPrimitive?.intOrNull,
                     myLoadoutValue = economy?.get("loadoutValue")?.jsonPrimitive?.intOrNull,
+                    kills = roundKills(r, i, json).mapNotNull { killer ->
+                        val k = players.firstOrNull { it.puuid.equals(killer, ignoreCase = true) } ?: return@mapNotNull null
+                        RoundKill(k.teamId, k.agentIcon, k.name)
+                    },
                 )
             },
-            duels = if (!teamMode || me == null) emptyList() else ordered.filter { it.teamId != me.teamId }.map { enemyPlayer ->
-                val mePid = me.puuid.lowercase()
-                val enemyPid = enemyPlayer.puuid.lowercase()
-                Duel(
-                    opponent = enemyPlayer,
-                    kills = killPairs.count { (killer, victim) -> killer == mePid && victim == enemyPid },
-                    deaths = killPairs.count { (killer, victim) -> killer == enemyPid && victim == mePid },
-                )
-            },
+            killCounts = killPairs.groupingBy { (killer, victim) -> "$killer|$victim" }.eachCount(),
         )
+    }
+
+    /** PUUID pembunuh di ronde [index], urut waktu; format per ronde atau `kills` di level atas. */
+    private fun roundKills(round: JsonObject, index: Int, match: JsonObject): List<String> {
+        val perRound = (round["playerStats"] as? JsonArray).orEmpty().flatMap { ps ->
+            (ps.jsonObject["kills"] as? JsonArray).orEmpty().map { it.jsonObject }
+        }
+        val kills = perRound.ifEmpty {
+            (match["kills"] as? JsonArray).orEmpty().map { it.jsonObject }
+                .filter { it["round"]?.jsonPrimitive?.intOrNull == index }
+        }
+        return kills.sortedBy { it["roundTime"]?.jsonPrimitive?.longOrNull ?: 0 }.mapNotNull { it.str("killer") }
     }
 
     private fun roundOutcome(code: String?, text: String?): RoundOutcome = when {

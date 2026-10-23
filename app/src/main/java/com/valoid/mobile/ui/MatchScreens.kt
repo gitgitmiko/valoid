@@ -1,9 +1,11 @@
 package com.valoid.mobile.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import com.valoid.mobile.data.RoundOutcome
 import com.valoid.mobile.data.RoundInfo
-import com.valoid.mobile.data.Duel
+import com.valoid.mobile.data.RoundKill
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
@@ -196,11 +198,28 @@ fun MatchDetailScreen(match: Match, onBack: () -> Unit) {
             }
             DetailTab.ROUNDS -> {
                 if (match.rounds.isEmpty()) item { EmptyNote("Data ronde tidak tersedia untuk match ini.") }
+                if (match.rounds.any { it.kills.isNotEmpty() }) item { KillFeed(match) }
+                if (match.rounds.isNotEmpty()) {
+                    item {
+                        Text(
+                            "DETAIL PER RONDE",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                }
                 items(match.rounds, key = { "r" + it.number }) { RoundRow(it, won = it.winningTeam == myTeam) }
             }
             DetailTab.DUELS -> {
-                if (match.duels.isEmpty()) item { EmptyNote("Data duel tidak tersedia untuk match ini.") }
-                items(match.duels, key = { "d" + it.opponent.puuid }) { DuelRow(it) }
+                val mine = match.players.filter { it.teamId == myTeam }
+                val enemies = match.players.filter { it.teamId != myTeam }
+                if (match.killCounts.isEmpty() || mine.isEmpty() || enemies.isEmpty()) {
+                    item { EmptyNote("Data duel tidak tersedia untuk match ini.") }
+                } else {
+                    item { DuelSummary(match, mine, enemies) }
+                    item { DuelMatrix(match, mine, enemies) }
+                }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
@@ -397,32 +416,123 @@ private fun RoundRow(r: RoundInfo, won: Boolean) {
     }
 }
 
+/** Per ronde: kill timmu ditumpuk di atas nomor ronde, kill lawan di bawahnya (satu ikon agent per kill). */
 @Composable
-private fun DuelRow(d: Duel) {
-    val total = (d.kills + d.deaths).coerceAtLeast(1)
-    Column(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).padding(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(d.opponent.agentIcon, d.opponent.agentName, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
-            Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text(d.opponent.name, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                Text(d.opponent.agentName ?: "", style = MaterialTheme.typography.bodySmall)
+private fun KillFeed(match: Match) {
+    val myTeam = match.me?.teamId
+    val cell = 36.dp
+    val gap = 4.dp
+    val maxMine = match.rounds.maxOf { r -> r.kills.count { it.killerTeam == myTeam } }
+    val maxEnemy = match.rounds.maxOf { r -> r.kills.count { it.killerTeam != myTeam } }
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+        match.rounds.forEach { r ->
+            val won = r.winningTeam == myTeam
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 2.dp)) {
+                Column(
+                    Modifier.height((cell + gap) * maxMine),
+                    verticalArrangement = Arrangement.spacedBy(gap, Alignment.Bottom),
+                ) {
+                    r.kills.filter { it.killerTeam == myTeam }.forEach { KillIcon(it, WinColor, cell) }
+                }
+                Box(
+                    Modifier.padding(vertical = 6.dp).size(width = cell + 6.dp, height = 30.dp)
+                        .background((if (won) WinColor else LossColor).copy(alpha = 0.25f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("${r.number}", color = if (won) WinColor else LossColor, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    Modifier.height((cell + gap) * maxEnemy),
+                    verticalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    r.kills.filter { it.killerTeam != myTeam }.forEach { KillIcon(it, LossColor, cell) }
+                }
             }
-            Text("${d.kills}", color = WinColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-            Text("  :  ", style = MaterialTheme.typography.titleMedium)
-            Text("${d.deaths}", color = LossColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
         }
-        Row(Modifier.padding(top = 8.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))) {
-            if (d.kills > 0) Box(Modifier.weight(d.kills.toFloat() / total).fillMaxHeight().background(WinColor))
-            if (d.deaths > 0) Box(Modifier.weight(d.deaths.toFloat() / total).fillMaxHeight().background(LossColor))
-            if (d.kills + d.deaths == 0) Box(Modifier.weight(1f).fillMaxHeight().background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
+    }
+}
+
+@Composable
+private fun KillIcon(kill: RoundKill, color: Color, size: androidx.compose.ui.unit.Dp) {
+    AsyncImage(
+        kill.killerAgentIcon,
+        kill.killerName,
+        modifier = Modifier.size(size).clip(CircleShape).border(2.dp, color, CircleShape).background(color.copy(alpha = 0.25f)),
+    )
+}
+
+private class Pairing(val ally: MatchPlayer, val enemy: MatchPlayer, val kills: Int, val deaths: Int)
+
+@Composable
+private fun DuelSummary(match: Match, mine: List<MatchPlayer>, enemies: List<MatchPlayer>) {
+    val pairs = mine.flatMap { a -> enemies.map { e -> Pairing(a, e, match.kills(a, e), match.kills(e, a)) } }
+    val rivalry = pairs.maxByOrNull { it.kills + it.deaths }
+    val domination = pairs.maxByOrNull { it.kills - it.deaths }?.takeIf { it.kills > it.deaths }
+    val nemesis = pairs.filter { it.ally.isMe }.maxByOrNull { it.deaths - it.kills }?.takeIf { it.deaths > it.kills }
+    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SummaryCard("Rival terbesar", rivalry, Modifier.weight(1f))
+        SummaryCard("Dominasi", domination, Modifier.weight(1f))
+        SummaryCard("Lawan terberat", nemesis, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SummaryCard(label: String, p: Pairing?, modifier: Modifier) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, modifier = modifier) {
+        Column(Modifier.padding(vertical = 12.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                AsyncImage(p?.ally?.agentIcon, p?.ally?.name, modifier = Modifier.size(30.dp).clip(CircleShape))
+                AsyncImage(p?.enemy?.agentIcon, p?.enemy?.name, modifier = Modifier.size(30.dp).clip(CircleShape))
+            }
+            Text(p?.let { "${it.kills}:${it.deaths}" } ?: "-", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 6.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), maxLines = 1)
+        }
+    }
+}
+
+/** Baris = pemain timmu, kolom = lawan; sel "kill:mati" dari sudut pandang pemain di baris. */
+@Composable
+private fun DuelMatrix(match: Match, mine: List<MatchPlayer>, enemies: List<MatchPlayer>) {
+    val cell = 54.dp
+    Column(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(cell))
+            enemies.forEach { e ->
+                Box(Modifier.size(cell), contentAlignment = Alignment.Center) {
+                    AsyncImage(e.agentIcon, e.name, modifier = Modifier.size(40.dp).clip(CircleShape).border(2.dp, LossColor, CircleShape))
+                }
+            }
+        }
+        mine.forEach { a ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(cell), contentAlignment = Alignment.Center) {
+                    AsyncImage(
+                        a.agentIcon,
+                        a.name,
+                        modifier = Modifier.size(40.dp).clip(CircleShape).border(2.dp, if (a.isMe) MaterialTheme.colorScheme.primary else WinColor, CircleShape),
+                    )
+                }
+                enemies.forEach { e ->
+                    val k = match.kills(a, e)
+                    val d = match.kills(e, a)
+                    val color = when {
+                        k > d -> WinColor
+                        k < d -> LossColor
+                        else -> NeutralColor
+                    }
+                    Box(
+                        Modifier.size(cell).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("$k:$d", color = color, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
         Text(
-            "Kamu membunuh ${d.kills}× • dibunuh ${d.deaths}×",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier.padding(top = 6.dp),
+            "Baris: pemain timmu • Kolom: lawan • Angka: kill : mati",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
     }
 }

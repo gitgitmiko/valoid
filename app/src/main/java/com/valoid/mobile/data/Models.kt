@@ -189,8 +189,12 @@ data class Match(
     val players: List<MatchPlayer>,
     val mapSplash: String? = null,
     val rounds: List<RoundInfo> = emptyList(),
-    val duels: List<Duel> = emptyList(),
-)
+    /** Jumlah kill per pasangan "pembunuh|korban" (PUUID huruf kecil). */
+    val killCounts: Map<String, Int> = emptyMap(),
+) {
+    fun kills(killer: MatchPlayer, victim: MatchPlayer): Int =
+        killCounts["${killer.puuid.lowercase()}|${victim.puuid.lowercase()}"] ?: 0
+}
 
 enum class RoundOutcome(val label: String) {
     ELIMINATION("Eliminasi"),
@@ -210,10 +214,11 @@ data class RoundInfo(
     val myKills: Int,
     val mySpent: Int?,
     val myLoadoutValue: Int?,
+    /** Kill di ronde ini sesuai urutan, untuk kill feed. */
+    val kills: List<RoundKill> = emptyList(),
 )
 
-/** Hasil duel pemain dengan satu lawan sepanjang match. */
-data class Duel(val opponent: MatchPlayer, val kills: Int, val deaths: Int)
+data class RoundKill(val killerTeam: String, val killerAgentIcon: String?, val killerName: String)
 
 data class ContractReward(val name: String, val iconUrl: String?, val amount: Int)
 
