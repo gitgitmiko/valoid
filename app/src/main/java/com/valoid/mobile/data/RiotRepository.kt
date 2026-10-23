@@ -255,7 +255,10 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
                         runCatching {
                             parseMatch(get(pd(session, "match-details/v1/matches/$id").build()).jsonObject, session.puuid, rrByMatch[id])
                         }.getOrNull()
-                    }?.also { matchCache[id] = it }
+                    }?.also {
+                        // Jangan simpan hasil yang data map-nya gagal dimuat dari valorant-api.
+                        if (it.mapImage != null) matchCache[id] = it
+                    }
                 }
             }.awaitAll().filterNotNull()
         }
@@ -267,6 +270,27 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         val seasonId = info.str("seasonId")
         val map = apiList("maps").map { it.jsonObject }.firstOrNull { it.str("mapUrl").equals(info.str("mapId"), ignoreCase = true) }
         val agents = apiList("agents?isPlayableCharacter=true").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+
+        val roundsJson = (json["roundResults"] as? JsonArray).orEmpty().map { it.jsonObject }
+        val roundStats = roundsJson.flatMap { (it["playerStats"] as? JsonArray).orEmpty().map { ps -> ps.jsonObject } }
+
+        // Headshot per penembak, dari semua event damage di semua ronde.
+        val shots = HashMap<String, IntArray>() // [kepala, badan, kaki]
+        roundStats.forEach { ps ->
+            val shooter = ps.str("subject")?.lowercase() ?: return@forEach
+            (ps["damage"] as? JsonArray).orEmpty().forEach { d ->
+                val o = d.jsonObject
+                val acc = shots.getOrPut(shooter) { IntArray(3) }
+                acc[0] += o["headshots"]?.jsonPrimitive?.intOrNull ?: 0
+                acc[1] += o["bodyshots"]?.jsonPrimitive?.intOrNull ?: 0
+                acc[2] += o["legshots"]?.jsonPrimitive?.intOrNull ?: 0
+            }
+        }
+        // Semua kill (pembunuh, korban); format lama ada per ronde, format baru di level atas.
+        val killPairs = (roundStats.flatMap { (it["kills"] as? JsonArray).orEmpty() }
+            .ifEmpty { (json["kills"] as? JsonArray).orEmpty() })
+            .map { it.jsonObject }
+            .mapNotNull { k -> k.str("killer")?.lowercase()?.let { killer -> killer to k.str("victim")?.lowercase() } }
 
         val players = json["players"]?.jsonArray.orEmpty().map { it.jsonObject }.map { p ->
             val stats = p["stats"] as? JsonObject
@@ -289,6 +313,11 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
                 assists = stats?.get("assists")?.jsonPrimitive?.intOrNull ?: 0,
                 acs = if (rounds > 0) score / rounds else 0,
                 isMe = p.str("subject").equals(puuid, ignoreCase = true),
+                level = p["accountLevel"]?.jsonPrimitive?.intOrNull,
+                headshotPercent = shots[p.str("subject")?.lowercase()]?.let { (head, body, leg) ->
+                    val total = head + body + leg
+                    if (total > 0) head * 100 / total else null
+                },
             )
         }.sortedByDescending { it.acs }
 
@@ -326,7 +355,42 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             rrChange = rrChange,
             teams = teams,
             players = ordered,
+            mapSplash = map?.str("splash"),
+            rounds = roundsJson.mapIndexed { i, r ->
+                val mine = (r["playerStats"] as? JsonArray).orEmpty().map { it.jsonObject }
+                    .firstOrNull { it.str("subject").equals(puuid, ignoreCase = true) }
+                val economy = mine?.get("economy") as? JsonObject
+                fun nameOf(id: String?) = id?.let { pid -> players.firstOrNull { it.puuid.equals(pid, ignoreCase = true) }?.name }
+                RoundInfo(
+                    number = (r["roundNum"]?.jsonPrimitive?.intOrNull ?: i) + 1,
+                    winningTeam = r.str("winningTeam").orEmpty(),
+                    outcome = roundOutcome(r.str("roundResultCode"), r.str("roundResult")),
+                    planter = nameOf(r.str("bombPlanter")),
+                    defuser = nameOf(r.str("bombDefuser")),
+                    myKills = (mine?.get("kills") as? JsonArray)?.size ?: 0,
+                    mySpent = economy?.get("spent")?.jsonPrimitive?.intOrNull,
+                    myLoadoutValue = economy?.get("loadoutValue")?.jsonPrimitive?.intOrNull,
+                )
+            },
+            duels = if (!teamMode || me == null) emptyList() else ordered.filter { it.teamId != me.teamId }.map { enemyPlayer ->
+                val mePid = me.puuid.lowercase()
+                val enemyPid = enemyPlayer.puuid.lowercase()
+                Duel(
+                    opponent = enemyPlayer,
+                    kills = killPairs.count { (killer, victim) -> killer == mePid && victim == enemyPid },
+                    deaths = killPairs.count { (killer, victim) -> killer == enemyPid && victim == mePid },
+                )
+            },
         )
+    }
+
+    private fun roundOutcome(code: String?, text: String?): RoundOutcome = when {
+        code == "Elimination" || text == "Eliminated" -> RoundOutcome.ELIMINATION
+        code == "Defuse" || text == "Bomb defused" -> RoundOutcome.DEFUSE
+        code == "Detonate" || text == "Bomb detonated" -> RoundOutcome.DETONATE
+        text == "Round timer expired" -> RoundOutcome.TIME
+        code == "Surrendered" || text == "Surrendered" -> RoundOutcome.SURRENDER
+        else -> RoundOutcome.OTHER
     }
 
     private fun queueName(queue: String?, flow: String?): String = when (queue) {

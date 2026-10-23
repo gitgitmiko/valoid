@@ -161,7 +161,12 @@ data class MatchPlayer(
     /** Skor tempur rata-rata per ronde. */
     val acs: Int,
     val isMe: Boolean,
-)
+    val level: Int? = null,
+    /** Persentase tembakan kena yang mengenai kepala; null bila tidak ada data damage. */
+    val headshotPercent: Int? = null,
+) {
+    val kd: Double get() = if (deaths == 0) kills.toDouble() else kills.toDouble() / deaths
+}
 
 data class TeamScore(val teamId: String, val won: Boolean, val roundsWon: Int)
 
@@ -182,7 +187,33 @@ data class Match(
     val rrChange: Int?,
     val teams: List<TeamScore>,
     val players: List<MatchPlayer>,
+    val mapSplash: String? = null,
+    val rounds: List<RoundInfo> = emptyList(),
+    val duels: List<Duel> = emptyList(),
 )
+
+enum class RoundOutcome(val label: String) {
+    ELIMINATION("Eliminasi"),
+    DEFUSE("Spike dijinakkan"),
+    DETONATE("Spike meledak"),
+    TIME("Waktu habis"),
+    SURRENDER("Menyerah"),
+    OTHER("Selesai"),
+}
+
+data class RoundInfo(
+    val number: Int,
+    val winningTeam: String,
+    val outcome: RoundOutcome,
+    val planter: String?,
+    val defuser: String?,
+    val myKills: Int,
+    val mySpent: Int?,
+    val myLoadoutValue: Int?,
+)
+
+/** Hasil duel pemain dengan satu lawan sepanjang match. */
+data class Duel(val opponent: MatchPlayer, val kills: Int, val deaths: Int)
 
 data class ContractReward(val name: String, val iconUrl: String?, val amount: Int)
 
