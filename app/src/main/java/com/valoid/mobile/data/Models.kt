@@ -29,8 +29,12 @@ data class Storefront(
     val nightMarket: List<SkinOffer>,
     val nightMarketRemainingSeconds: Long,
     val bundles: List<BundleOffer> = emptyList(),
+    val accessories: List<AccessoryOffer> = emptyList(),
+    val accessoryRemainingSeconds: Long = 0,
     val fetchedAtMillis: Long = System.currentTimeMillis(),
 ) {
+    val accessoryEndsAtMillis: Long get() = fetchedAtMillis + accessoryRemainingSeconds * 1000
+
     fun endsAtMillis(bundle: BundleOffer): Long = fetchedAtMillis + bundle.remainingSeconds * 1000
 
     val dailyEndsAtMillis: Long get() = fetchedAtMillis + dailyRemainingSeconds * 1000
@@ -90,3 +94,13 @@ data class BundleOffer(
 ) {
     val discountPercent: Int get() = if (basePrice > price && basePrice > 0) (basePrice - price) * 100 / basePrice else 0
 }
+
+/** Item di toko aksesori, dibayar dengan Kingdom Credits. */
+data class AccessoryOffer(
+    val id: String,
+    val type: ItemType,
+    val name: String,
+    val iconUrl: String?,
+    val amount: Int,
+    val cost: Int,
+)

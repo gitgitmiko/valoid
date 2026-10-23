@@ -75,6 +75,7 @@ fun OfferListScreen(
     onRefresh: () -> Unit,
     onOfferClick: (SkinOffer) -> Unit,
     header: @Composable () -> Unit = {},
+    footer: @Composable () -> Unit = {},
 ) {
     val secondsLeft = rememberSecondsLeft(endsAtMillis)
     // Muat ulang otomatis begitu toko berganti.
@@ -110,6 +111,7 @@ fun OfferListScreen(
             offers.isEmpty() -> item { Text(emptyText, Modifier.padding(vertical = 48.dp)) }
             else -> items(offers, key = { it.id }) { SkinCard(it, onClick = { onOfferClick(it) }) }
         }
+        item { footer() }
     }
 }
 

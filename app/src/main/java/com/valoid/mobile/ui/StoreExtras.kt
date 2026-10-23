@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.valoid.mobile.data.AccessoryOffer
 import com.valoid.mobile.data.BundleOffer
 import com.valoid.mobile.data.Wallet
 import java.text.NumberFormat
@@ -115,5 +116,59 @@ fun BundleCard(bundle: BundleOffer, endsAtMillis: Long, onClick: (() -> Unit)?, 
         Card(onClick = onClick, shape = RoundedCornerShape(16.dp), modifier = modifier) { content() }
     } else {
         Card(shape = RoundedCornerShape(16.dp), modifier = modifier) { content() }
+    }
+}
+
+private const val ICON_KINGDOM_CREDITS = "https://media.valorant-api.com/currencies/85ca954a-41f2-ce94-9b45-8ca3dd39a00d/displayicon.png"
+
+/** Grid dua kolom; bukan Lazy agar bisa diletakkan di dalam LazyColumn toko. */
+@Composable
+fun AccessoryGrid(accessories: List<AccessoryOffer>, endsAtMillis: Long) {
+    val secondsLeft = rememberSecondsLeft(endsAtMillis)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Aksesori", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text("⏱ ${formatCountdown(secondsLeft)}", style = MaterialTheme.typography.bodyMedium)
+        }
+        accessories.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { AccessoryCard(it, Modifier.weight(1f)) }
+                if (pair.size == 1) Box(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccessoryCard(item: AccessoryOffer, modifier: Modifier) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, modifier = modifier) {
+        Column(Modifier.padding(12.dp)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(1.3f), contentAlignment = Alignment.Center) {
+                if (item.iconUrl != null) {
+                    AsyncImage(item.iconUrl, item.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(8.dp))
+                } else {
+                    // Title tidak punya gambar; tampilkan teksnya sebagai label.
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) {
+                        Text(
+                            item.name.uppercase(),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+            Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+            Text(
+                if (item.amount > 1) "${item.type.label} ×${item.amount}" else item.type.label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                AsyncImage(ICON_KINGDOM_CREDITS, "Kingdom Credits", Modifier.size(16.dp))
+                Text(" ${formatAmount(item.cost)}", fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }

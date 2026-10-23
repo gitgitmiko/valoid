@@ -130,6 +130,11 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                             }
                         }
                     },
+                    footer = {
+                        if (front != null && front.accessories.isNotEmpty()) {
+                            AccessoryGrid(front.accessories, front.accessoryEndsAtMillis)
+                        }
+                    },
                 )
                 else -> OfferListScreen(
                     title = "Night Market",

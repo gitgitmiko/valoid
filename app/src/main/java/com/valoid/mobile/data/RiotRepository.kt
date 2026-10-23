@@ -160,6 +160,8 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         val bundlesJson = featured?.get("Bundles")?.jsonArray?.map { it.jsonObject }
             ?: listOfNotNull(featured?.get("Bundle")?.jsonObject)
 
+        val accessoryStore = root["AccessoryStore"]?.jsonObject
+
         Storefront(
             daily = resolve(dailyRaw),
             dailyRemainingSeconds = panel["SingleItemOffersRemainingDurationInSeconds"]?.jsonPrimitive?.long ?: 0,
@@ -168,6 +170,8 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             bundles = coroutineScope {
                 bundlesJson.map { async { runCatching { parseBundle(it, featuredRemaining) }.getOrNull() } }.awaitAll().filterNotNull()
             },
+            accessories = accessoryStore?.let { runCatching { parseAccessories(it) }.getOrNull() }.orEmpty(),
+            accessoryRemainingSeconds = accessoryStore?.get("AccessoryStoreRemainingDurationInSeconds")?.jsonPrimitive?.longOrNull ?: 0,
         )
     }
 
@@ -202,6 +206,27 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             remainingSeconds = b["DurationRemainingInSeconds"]?.jsonPrimitive?.longOrNull ?: fallbackRemaining,
             items = items,
         )
+    }
+
+    /** Mengubah `AccessoryStore` dari Riot menjadi daftar [AccessoryOffer]. */
+    internal suspend fun parseAccessories(store: JsonObject): List<AccessoryOffer> = withContext(Dispatchers.IO) {
+        store["AccessoryStoreOffers"]?.jsonArray.orEmpty().map { entry ->
+            async {
+                val offer = entry.jsonObject["Offer"]!!.jsonObject
+                val reward = offer["Rewards"]?.jsonArray?.firstOrNull()?.jsonObject
+                val type = ITEM_TYPES[reward?.str("ItemTypeID")] ?: ItemType.OTHER
+                val itemId = reward?.str("ItemID") ?: offer.str("OfferID")!!
+                val (name, icon) = itemInfo(type, itemId)
+                AccessoryOffer(
+                    id = offer.str("OfferID") ?: itemId,
+                    type = type,
+                    name = name,
+                    iconUrl = icon,
+                    amount = reward?.get("Quantity")?.jsonPrimitive?.intOrNull ?: 1,
+                    cost = firstCost(offer["Cost"]),
+                )
+            }
+        }.awaitAll()
     }
 
     private fun itemInfo(type: ItemType, id: String): Pair<String, String?> {
