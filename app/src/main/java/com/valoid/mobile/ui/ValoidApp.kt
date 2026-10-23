@@ -1,9 +1,11 @@
 package com.valoid.mobile.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -20,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.valoid.mobile.data.SkinOffer
 
 private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"), HISTORY("Riwayat") }
 
@@ -28,6 +31,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val user by authVm.user.collectAsStateWithLifecycle()
     val shop by shopVm.state.collectAsStateWithLifecycle()
     val detail by shopVm.detail.collectAsStateWithLifecycle()
+    val bundle by shopVm.bundle.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
 
@@ -52,6 +56,18 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
 
     detail?.let {
         SkinDetailScreen(it, onBack = shopVm::closeDetail)
+        return
+    }
+
+    val front = shop.storefront
+    bundle?.let { b ->
+        val endsAt = front?.endsAtMillis(b) ?: 0
+        BundleDetailScreen(
+            bundle = b,
+            endsAtMillis = endsAt,
+            onBack = shopVm::closeBundle,
+            onSkinClick = { item -> shopVm.openDetail(SkinOffer(item.id, item.name, item.iconUrl, item.price), endsAt) },
+        )
         return
     }
 
@@ -105,6 +121,15 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     error = shop.error,
                     onRefresh = { shopVm.refresh(uid) },
                     onOfferClick = { shopVm.openDetail(it, shop.storefront?.dailyEndsAtMillis ?: 0) },
+                    header = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            shop.wallet?.let { WalletBar(it) }
+                            if (front != null && front.bundles.isNotEmpty()) {
+                                Text("Bundle", style = MaterialTheme.typography.titleLarge)
+                                BundleRow(front.bundles, front::endsAtMillis, shopVm::openBundle)
+                            }
+                        }
+                    },
                 )
                 else -> OfferListScreen(
                     title = "Night Market",

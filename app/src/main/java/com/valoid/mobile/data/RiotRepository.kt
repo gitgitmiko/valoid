@@ -16,6 +16,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.doubleOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -91,17 +93,38 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         return RiotRegion.entries.firstOrNull { it.shard == shard }
     }
 
-    suspend fun loadStorefront(session: RiotSession): Storefront = withContext(Dispatchers.IO) {
-        val version = get(Request.Builder().url("https://valorant-api.com/v1/version").build())
-            .jsonObject["data"]?.jsonObject?.get("riotClientVersion")?.jsonPrimitive?.contentOrNull
-            ?: throw RiotException("Versi client Valorant tidak ditemukan")
+    @Volatile
+    private var cachedClientVersion: String? = null
 
-        fun storefront(v3: Boolean) = Request.Builder()
-            .url("https://pd.${session.region.shard}.a.pvp.net/store/${if (v3) "v3" else "v2"}/storefront/${session.puuid}")
-            .header("Authorization", "Bearer ${session.accessToken}")
-            .header("X-Riot-Entitlements-JWT", session.entitlementsToken)
-            .header("X-Riot-ClientPlatform", CLIENT_PLATFORM)
-            .header("X-Riot-ClientVersion", version)
+    private fun clientVersion(): String = cachedClientVersion
+        ?: (
+            get(Request.Builder().url("https://valorant-api.com/v1/version").build())
+                .jsonObject["data"]?.jsonObject?.get("riotClientVersion")?.jsonPrimitive?.contentOrNull
+                ?: throw RiotException("Versi client Valorant tidak ditemukan")
+            ).also { cachedClientVersion = it }
+
+    /** Request ke server data pemain (pd.<shard>.a.pvp.net) dengan header autentikasi Riot. */
+    private fun pd(session: RiotSession, path: String) = Request.Builder()
+        .url("https://pd.${session.region.shard}.a.pvp.net/$path")
+        .header("Authorization", "Bearer ${session.accessToken}")
+        .header("X-Riot-Entitlements-JWT", session.entitlementsToken)
+        .header("X-Riot-ClientPlatform", CLIENT_PLATFORM)
+        .header("X-Riot-ClientVersion", clientVersion())
+
+    suspend fun loadWallet(session: RiotSession): Wallet = withContext(Dispatchers.IO) {
+        val balances = get(pd(session, "store/v1/wallet/${session.puuid}").build())
+            .jsonObject["Balances"]?.jsonObject
+            ?: throw RiotException("Data dompet tidak ditemukan")
+        fun balance(currency: String) = balances[currency]?.jsonPrimitive?.intOrNull ?: 0
+        Wallet(
+            valorantPoints = balance(CURRENCY_VP),
+            kingdomCredits = balance(CURRENCY_KINGDOM),
+            radianite = balance(CURRENCY_RADIANITE),
+        )
+    }
+
+    suspend fun loadStorefront(session: RiotSession): Storefront = withContext(Dispatchers.IO) {
+        fun storefront(v3: Boolean) = pd(session, "store/${if (v3) "v3" else "v2"}/storefront/${session.puuid}")
             .apply { if (v3) post("{}".toRequestBody(JSON)) }
             .build()
 
@@ -132,13 +155,82 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             )
         } ?: emptyList()
 
+        val featured = root["FeaturedBundle"]?.jsonObject
+        val featuredRemaining = featured?.get("BundleRemainingDurationInSeconds")?.jsonPrimitive?.longOrNull ?: 0
+        val bundlesJson = featured?.get("Bundles")?.jsonArray?.map { it.jsonObject }
+            ?: listOfNotNull(featured?.get("Bundle")?.jsonObject)
+
         Storefront(
             daily = resolve(dailyRaw),
             dailyRemainingSeconds = panel["SingleItemOffersRemainingDurationInSeconds"]?.jsonPrimitive?.long ?: 0,
             nightMarket = resolve(nightRaw),
             nightMarketRemainingSeconds = bonus?.get("BonusStoreRemainingDurationInSeconds")?.jsonPrimitive?.long ?: 0,
+            bundles = coroutineScope {
+                bundlesJson.map { async { runCatching { parseBundle(it, featuredRemaining) }.getOrNull() } }.awaitAll().filterNotNull()
+            },
         )
     }
+
+    /** Mengubah satu entri `FeaturedBundle.Bundles` dari Riot menjadi [BundleOffer]. */
+    internal suspend fun parseBundle(b: JsonObject, fallbackRemaining: Long): BundleOffer = withContext(Dispatchers.IO) {
+        val id = (b["DataAssetID"] ?: b["ID"])!!.jsonPrimitive.content
+        val items = b["Items"]?.jsonArray.orEmpty().map { entry ->
+            val o = entry.jsonObject
+            val item = o["Item"]!!.jsonObject
+            async {
+                val type = ITEM_TYPES[item["ItemTypeID"]?.jsonPrimitive?.contentOrNull] ?: ItemType.OTHER
+                val itemId = item["ItemID"]!!.jsonPrimitive.content
+                val (name, icon) = itemInfo(type, itemId)
+                BundleItem(
+                    type = type,
+                    id = itemId,
+                    name = name,
+                    iconUrl = icon,
+                    amount = item["Amount"]?.jsonPrimitive?.intOrNull ?: 1,
+                    price = o["DiscountedPrice"]?.jsonPrimitive?.doubleOrNull?.toInt() ?: 0,
+                    basePrice = o["BasePrice"]?.jsonPrimitive?.doubleOrNull?.toInt() ?: 0,
+                )
+            }
+        }.awaitAll()
+        val info = apiData("bundles/$id")
+        BundleOffer(
+            id = id,
+            name = info?.str("displayName") ?: "Bundle",
+            imageUrl = info?.str("displayIcon"),
+            price = firstCostOrNull(b["TotalDiscountedCost"]) ?: items.sumOf { it.price },
+            basePrice = firstCostOrNull(b["TotalBaseCost"]) ?: items.sumOf { it.basePrice },
+            remainingSeconds = b["DurationRemainingInSeconds"]?.jsonPrimitive?.longOrNull ?: fallbackRemaining,
+            items = items,
+        )
+    }
+
+    private fun itemInfo(type: ItemType, id: String): Pair<String, String?> {
+        val data = when (type) {
+            ItemType.SKIN -> apiData("weapons/skinlevels/$id")
+            ItemType.BUDDY -> apiData("buddies/levels/$id")
+            ItemType.SPRAY -> apiData("sprays/$id")
+            ItemType.CARD -> apiData("playercards/$id")
+            ItemType.TITLE -> apiData("playertitles/$id")
+            ItemType.FLEX -> apiData("flex/$id")
+            ItemType.OTHER -> null
+        }
+        val name = (if (type == ItemType.TITLE) data?.str("titleText") else null) ?: data?.str("displayName") ?: type.label
+        val icon = when (type) {
+            ItemType.SPRAY -> data?.str("fullTransparentIcon") ?: data?.str("displayIcon")
+            ItemType.CARD -> data?.str("largeArt") ?: data?.str("displayIcon")
+            else -> data?.str("displayIcon")
+        }
+        return name to icon
+    }
+
+    private val apiCache = ConcurrentHashMap<String, JsonObject>()
+
+    /** Objek `data` dari valorant-api.com/v1/<path>, di-cache; null bila tidak ditemukan. */
+    private fun apiData(path: String): JsonObject? = apiCache[path] ?: runCatching {
+        get(Request.Builder().url("https://valorant-api.com/v1/$path").build()).jsonObject["data"]?.jsonObject
+    }.getOrNull()?.also { apiCache[path] = it }
+
+    private fun JsonObject.str(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
     private class RawOffer(val id: String, val cost: Int, val discounted: Int?, val percent: Int)
 
@@ -183,6 +275,17 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
 
     private companion object {
         val JSON = "application/json".toMediaType()
+        const val CURRENCY_VP = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741"
+        const val CURRENCY_KINGDOM = "85ca954a-41f2-ce94-9b45-8ca3dd39a00d"
+        const val CURRENCY_RADIANITE = "e59aa87c-4cbf-517a-5983-6e81511be9b7"
+        val ITEM_TYPES = mapOf(
+            "e7c63390-eda7-46e0-bb7a-a6abdacd2433" to ItemType.SKIN,
+            "dd3bf334-87f3-40bd-b043-682a57a8dc3a" to ItemType.BUDDY,
+            "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475" to ItemType.SPRAY,
+            "3f296c07-64c3-494c-923b-fe692a4fa1bd" to ItemType.CARD,
+            "de7caa6b-adf7-4588-bbd1-143831e786c6" to ItemType.TITLE,
+            "03a572de-4234-31ed-d344-ababa488f981" to ItemType.FLEX,
+        )
         val CLIENT_PLATFORM: String = Base64.encodeToString(
             """{"platformType":"PC","platformOS":"Windows","platformOSVersion":"10.0.19042.1.256.64bit","platformChipset":"Unknown"}"""
                 .toByteArray(),

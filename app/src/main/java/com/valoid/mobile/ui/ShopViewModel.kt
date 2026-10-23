@@ -2,6 +2,7 @@ package com.valoid.mobile.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.valoid.mobile.data.BundleOffer
 import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
@@ -13,6 +14,7 @@ import com.valoid.mobile.data.SkinCatalogRepository
 import com.valoid.mobile.data.SkinDetail
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.data.Storefront
+import com.valoid.mobile.data.Wallet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -24,6 +26,7 @@ data class ShopUiState(
     val connected: Boolean = false,
     val loading: Boolean = false,
     val storefront: Storefront? = null,
+    val wallet: Wallet? = null,
     val error: String? = null,
     val history: List<HistoryDay> = emptyList(),
     val historyLoading: Boolean = false,
@@ -50,6 +53,17 @@ class ShopViewModel(
 
     private val _detail = MutableStateFlow<DetailUiState?>(null)
     val detail: StateFlow<DetailUiState?> = _detail
+
+    private val _bundle = MutableStateFlow<BundleOffer?>(null)
+    val bundle: StateFlow<BundleOffer?> = _bundle
+
+    fun openBundle(bundle: BundleOffer) {
+        _bundle.value = bundle
+    }
+
+    fun closeBundle() {
+        _bundle.value = null
+    }
 
     fun openDetail(offer: SkinOffer, endsAtMillis: Long) {
         _detail.value = DetailUiState(offer, endsAtMillis)
@@ -111,6 +125,8 @@ class ShopViewModel(
             try {
                 val front = riot.loadStorefront(s)
                 _state.update { it.copy(loading = false, storefront = front) }
+                // Saldo tidak wajib: kegagalan dompet tidak menggagalkan toko.
+                runCatching { riot.loadWallet(s) }.onSuccess { w -> _state.update { it.copy(wallet = w) } }
                 runCatching { history.saveDay(uid, LocalDate.now().toString(), front.daily) }
             } catch (e: RiotException) {
                 if (e.sessionExpired) {

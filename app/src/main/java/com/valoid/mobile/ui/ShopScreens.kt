@@ -3,6 +3,7 @@ package com.valoid.mobile.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,6 +74,7 @@ fun OfferListScreen(
     error: String?,
     onRefresh: () -> Unit,
     onOfferClick: (SkinOffer) -> Unit,
+    header: @Composable () -> Unit = {},
 ) {
     val secondsLeft = rememberSecondsLeft(endsAtMillis)
     // Muat ulang otomatis begitu toko berganti.
@@ -81,29 +83,32 @@ fun OfferListScreen(
         delay((endsAtMillis - System.currentTimeMillis()).coerceAtLeast(0) + 3000)
         onRefresh()
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                if (offers.isNotEmpty()) Text("Reset dalam ${formatCountdown(secondsLeft)}")
-            }
-            OutlinedButton(onClick = onRefresh, enabled = !loading) { Text("Muat ulang") }
-        }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Box(Modifier.fillMaxSize()) {
-            when {
-                loading && offers.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                offers.isEmpty() -> Text(emptyText, Modifier.align(Alignment.Center))
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(offers, key = { it.id }) { SkinCard(it, onClick = { onOfferClick(it) }) }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { header() }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                    if (offers.isNotEmpty()) Text("Reset dalam ${formatCountdown(secondsLeft)}")
                 }
+                OutlinedButton(onClick = onRefresh, enabled = !loading) { Text("Muat ulang") }
             }
+        }
+        error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+        when {
+            loading && offers.isEmpty() -> item {
+                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            }
+            offers.isEmpty() -> item { Text(emptyText, Modifier.padding(vertical = 48.dp)) }
+            else -> items(offers, key = { it.id }) { SkinCard(it, onClick = { onOfferClick(it) }) }
         }
     }
 }
@@ -121,10 +126,10 @@ private fun SkinCard(offer: SkinOffer, onClick: () -> Unit) {
             Column(Modifier.padding(start = 12.dp)) {
                 Text(offer.name, fontWeight = FontWeight.Bold)
                 if (offer.discountedCost != null) {
-                    Text("${offer.discountedCost} VP  (-${offer.discountPercent}%)", color = MaterialTheme.colorScheme.primary)
-                    Text("${offer.cost} VP", style = MaterialTheme.typography.bodySmall)
+                    Text("${formatAmount(offer.discountedCost)} VP  (-${offer.discountPercent}%)", color = MaterialTheme.colorScheme.primary)
+                    Text("${formatAmount(offer.cost)} VP", style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text("${offer.cost} VP")
+                    Text("${formatAmount(offer.cost)} VP")
                 }
             }
         }
