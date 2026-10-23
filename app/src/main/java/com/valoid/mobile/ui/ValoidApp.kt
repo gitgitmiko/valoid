@@ -51,6 +51,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showMatches by rememberSaveable { mutableStateOf(false) }
+    val openMatch by shopVm.openMatch.collectAsStateWithLifecycle()
     var lockEnabled by remember { mutableStateOf(AppLock.isEnabled(context)) }
     var settingsMessage by remember { mutableStateOf<String?>(null) }
 
@@ -133,6 +135,25 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         return
     }
 
+    openMatch?.let {
+        MatchDetailScreen(it, onBack = { shopVm.openMatch(null) })
+        return
+    }
+
+    if (showMatches) {
+        LaunchedEffect(Unit) { if (shop.matches.isEmpty()) shopVm.loadMatches() }
+        MatchHistoryScreen(
+            matches = shop.matches,
+            loading = shop.matchesLoading,
+            error = shop.matchesError,
+            canLoadMore = !shop.matchesEnd,
+            onLoadMore = { shopVm.loadMatches() },
+            onOpen = { shopVm.openMatch(it) },
+            onBack = { showMatches = false },
+        )
+        return
+    }
+
     detail?.let {
         SkinDetailScreen(
             it,
@@ -205,6 +226,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     loading = shop.profileLoading,
                     error = shop.profileError,
                     onRefresh = shopVm::loadProfile,
+                    onOpenMatches = { showMatches = true },
                 )
                 tab == Tab.SHOP -> OfferListScreen(
                     title = "Toko harian",

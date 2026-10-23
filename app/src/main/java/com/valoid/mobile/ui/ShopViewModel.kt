@@ -6,6 +6,7 @@ import com.valoid.mobile.data.BundleOffer
 import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryDay
+import com.valoid.mobile.data.Match
 import com.valoid.mobile.data.PlayerProfile
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
@@ -40,6 +41,10 @@ data class ShopUiState(
     val profile: PlayerProfile? = null,
     val profileLoading: Boolean = false,
     val profileError: String? = null,
+    val matches: List<Match> = emptyList(),
+    val matchesLoading: Boolean = false,
+    val matchesError: String? = null,
+    val matchesEnd: Boolean = false,
 )
 
 data class DetailUiState(
@@ -50,6 +55,8 @@ data class DetailUiState(
     val error: String? = null,
     val stats: SkinStats? = null,
 )
+
+private const val MATCH_PAGE = 10
 
 /**
  * Token Riot hanya disimpan di memori. Saat aplikasi dibuka lagi atau token kedaluwarsa, token baru
@@ -221,6 +228,33 @@ class ShopViewModel(
                     profile = result.getOrNull() ?: it.profile,
                     profileError = result.exceptionOrNull()?.message,
                 )
+            }
+        }
+    }
+
+    private val _openMatch = MutableStateFlow<Match?>(null)
+    val openMatch: StateFlow<Match?> = _openMatch
+
+    fun openMatch(match: Match?) {
+        _openMatch.value = match
+    }
+
+    /** Memuat halaman match berikutnya; [reset] memulai lagi dari match terbaru. */
+    fun loadMatches(reset: Boolean = false) {
+        val s = session ?: return
+        if (_state.value.matchesLoading) return
+        val start = if (reset) 0 else _state.value.matches.size
+        _state.update { it.copy(matchesLoading = true, matchesError = null) }
+        viewModelScope.launch {
+            val result = runCatching { riot.loadMatches(s, start, MATCH_PAGE) }
+            _state.update { st ->
+                val page = result.getOrNull()
+                if (page == null) {
+                    st.copy(matchesLoading = false, matchesError = result.exceptionOrNull()?.message ?: "Gagal memuat match")
+                } else {
+                    val merged = (if (reset) page else st.matches + page).distinctBy { it.id }.sortedByDescending { it.startedAtMillis }
+                    st.copy(matchesLoading = false, matches = merged, matchesEnd = page.size < MATCH_PAGE)
+                }
             }
         }
     }

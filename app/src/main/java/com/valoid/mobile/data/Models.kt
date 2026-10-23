@@ -143,3 +143,43 @@ data class PlayerProfile(
     val currentRank: RankInfo?,
     val peakRank: RankInfo?,
 )
+
+enum class MatchResult { WIN, LOSS, DRAW, UNKNOWN }
+
+data class MatchPlayer(
+    val puuid: String,
+    val name: String,
+    val tag: String?,
+    val teamId: String,
+    val agentName: String?,
+    val agentIcon: String?,
+    val tierIcon: String?,
+    val tierName: String?,
+    val kills: Int,
+    val deaths: Int,
+    val assists: Int,
+    /** Skor tempur rata-rata per ronde. */
+    val acs: Int,
+    val isMe: Boolean,
+)
+
+data class TeamScore(val teamId: String, val won: Boolean, val roundsWon: Int)
+
+data class Match(
+    val id: String,
+    val queue: String,
+    val mapName: String,
+    val mapImage: String?,
+    val startedAtMillis: Long,
+    val lengthMillis: Long,
+    val result: MatchResult,
+    /** Peringkat pemain berdasarkan skor, untuk mode tanpa tim (Deathmatch). */
+    val placement: Int?,
+    val myRounds: Int?,
+    val enemyRounds: Int?,
+    val me: MatchPlayer?,
+    /** Perubahan RR; hanya untuk match kompetitif. */
+    val rrChange: Int?,
+    val teams: List<TeamScore>,
+    val players: List<MatchPlayer>,
+)

@@ -5,10 +5,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -225,6 +227,121 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
                 peakRank = peak?.let { rankInfo(it) },
             )
         }
+    }
+
+    private val matchCache = ConcurrentHashMap<String, Match>()
+
+    /** [count] match terbaru mulai dari [start], lengkap dengan detail dan perubahan RR. */
+    suspend fun loadMatches(session: RiotSession, start: Int, count: Int): List<Match> = withContext(Dispatchers.IO) {
+        val history = get(
+            pd(session, "match-history/v1/history/${session.puuid}?startIndex=$start&endIndex=${start + count}").build(),
+        ).jsonObject["History"]?.jsonArray.orEmpty().mapNotNull { it.jsonObject.str("MatchID") }
+
+        val rrByMatch = runCatching {
+            get(
+                pd(session, "mmr/v1/players/${session.puuid}/competitiveupdates?startIndex=0&endIndex=${start + count + 10}&queue=competitive").build(),
+            ).jsonObject["Matches"]?.jsonArray.orEmpty().associate { m ->
+                val o = m.jsonObject
+                o.str("MatchID").orEmpty() to o["RankedRatingEarned"]?.jsonPrimitive?.intOrNull
+            }
+        }.getOrDefault(emptyMap())
+
+        // Dibatasi beberapa sekaligus agar tidak terkena rate limit Riot.
+        val gate = kotlinx.coroutines.sync.Semaphore(4)
+        coroutineScope {
+            history.map { id ->
+                async {
+                    matchCache[id] ?: gate.withPermit {
+                        runCatching {
+                            parseMatch(get(pd(session, "match-details/v1/matches/$id").build()).jsonObject, session.puuid, rrByMatch[id])
+                        }.getOrNull()
+                    }?.also { matchCache[id] = it }
+                }
+            }.awaitAll().filterNotNull()
+        }
+    }
+
+    /** Mengubah respons `match-details` menjadi [Match] dari sudut pandang pemain [puuid]. */
+    internal fun parseMatch(json: JsonObject, puuid: String, rrChange: Int?): Match {
+        val info = json["matchInfo"]!!.jsonObject
+        val seasonId = info.str("seasonId")
+        val map = apiList("maps").map { it.jsonObject }.firstOrNull { it.str("mapUrl").equals(info.str("mapId"), ignoreCase = true) }
+        val agents = apiList("agents?isPlayableCharacter=true").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+
+        val players = json["players"]?.jsonArray.orEmpty().map { it.jsonObject }.map { p ->
+            val stats = p["stats"] as? JsonObject
+            val rounds = stats?.get("roundsPlayed")?.jsonPrimitive?.intOrNull ?: 0
+            val score = stats?.get("score")?.jsonPrimitive?.intOrNull ?: 0
+            val agent = agents[p.str("characterId")?.lowercase()]
+            val tier = p["competitiveTier"]?.jsonPrimitive?.intOrNull ?: 0
+            val rank = if (tier > 2) rankInfo(RawRank(tier, null, seasonId)) else null
+            MatchPlayer(
+                puuid = p.str("subject").orEmpty(),
+                name = p.str("gameName") ?: "Pemain",
+                tag = p.str("tagLine"),
+                teamId = p.str("teamId").orEmpty(),
+                agentName = agent?.str("displayName"),
+                agentIcon = agent?.str("displayIconSmall") ?: agent?.str("displayIcon"),
+                tierIcon = rank?.iconUrl,
+                tierName = rank?.tierName,
+                kills = stats?.get("kills")?.jsonPrimitive?.intOrNull ?: 0,
+                deaths = stats?.get("deaths")?.jsonPrimitive?.intOrNull ?: 0,
+                assists = stats?.get("assists")?.jsonPrimitive?.intOrNull ?: 0,
+                acs = if (rounds > 0) score / rounds else 0,
+                isMe = p.str("subject").equals(puuid, ignoreCase = true),
+            )
+        }.sortedByDescending { it.acs }
+
+        val teams = (json["teams"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            TeamScore(
+                teamId = it.str("teamId").orEmpty(),
+                won = it["won"]?.jsonPrimitive?.booleanOrNull ?: false,
+                roundsWon = it["roundsWon"]?.jsonPrimitive?.intOrNull ?: 0,
+            )
+        }
+        val teamMode = teams.size == 2
+        // Tanpa tim (Deathmatch) pemenang ditentukan oleh jumlah kill, bukan ACS.
+        val ordered = if (teamMode) players else players.sortedByDescending { it.kills }
+        val me = ordered.firstOrNull { it.isMe }
+        val myTeam = teams.firstOrNull { it.teamId == me?.teamId }
+        val enemy = teams.firstOrNull { it.teamId != me?.teamId }
+        val result = when {
+            !teamMode || myTeam == null || enemy == null -> MatchResult.UNKNOWN
+            myTeam.roundsWon == enemy.roundsWon && !myTeam.won && !enemy.won -> MatchResult.DRAW
+            myTeam.won -> MatchResult.WIN
+            else -> MatchResult.LOSS
+        }
+        return Match(
+            id = info.str("matchId").orEmpty(),
+            queue = queueName(info.str("queueID"), info.str("provisioningFlowID")),
+            mapName = map?.str("displayName") ?: "Map",
+            mapImage = map?.str("listViewIcon"),
+            startedAtMillis = info["gameStartMillis"]?.jsonPrimitive?.longOrNull ?: 0,
+            lengthMillis = info["gameLengthMillis"]?.jsonPrimitive?.longOrNull ?: 0,
+            result = result,
+            placement = if (teamMode || me == null) null else ordered.indexOf(me) + 1,
+            myRounds = if (teamMode) myTeam?.roundsWon else null,
+            enemyRounds = if (teamMode) enemy?.roundsWon else null,
+            me = me,
+            rrChange = rrChange,
+            teams = teams,
+            players = ordered,
+        )
+    }
+
+    private fun queueName(queue: String?, flow: String?): String = when (queue) {
+        "competitive" -> "Kompetitif"
+        "unrated" -> "Unrated"
+        "swiftplay" -> "Swiftplay"
+        "spikerush" -> "Spike Rush"
+        "deathmatch" -> "Deathmatch"
+        "hurm" -> "Team Deathmatch"
+        "ggteam" -> "Escalation"
+        "onefa" -> "Replication"
+        "premier" -> "Premier"
+        "newmap" -> "Map baru"
+        null, "" -> if (flow == "CustomGame") "Custom" else "Lainnya"
+        else -> queue.replaceFirstChar { it.uppercase() }
     }
 
     internal class RawRank(val tier: Int, val rankedRating: Int?, val seasonId: String?)

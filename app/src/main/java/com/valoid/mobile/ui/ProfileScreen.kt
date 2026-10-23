@@ -30,12 +30,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import coil.compose.AsyncImage
 import com.valoid.mobile.data.PlayerProfile
 import com.valoid.mobile.data.RankInfo
 
 @Composable
-fun ProfileScreen(profile: PlayerProfile?, loading: Boolean, error: String?, onRefresh: () -> Unit) {
+fun ProfileScreen(
+    profile: PlayerProfile?,
+    loading: Boolean,
+    error: String?,
+    onRefresh: () -> Unit,
+    onOpenMatches: () -> Unit,
+) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -54,6 +61,7 @@ fun ProfileScreen(profile: PlayerProfile?, loading: Boolean, error: String?, onR
             else -> {
                 item { ProfileHeader(profile) }
                 item { RankCard(profile.currentRank, profile.peakRank) }
+                item { MenuRow("Riwayat match", "Hasil, skor, K/D/A, dan papan skor tiap match", onOpenMatches) }
                 item {
                     OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
                         Text(if (loading) "Memuat..." else "Muat ulang profil")
@@ -140,5 +148,18 @@ private fun RankColumn(rank: RankInfo?, caption: String, showProgress: Boolean, 
         }
         Text(rank?.tierName ?: "UNRATED", color = color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
         Text(caption, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+    }
+}
+
+@Composable
+private fun MenuRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+        }
     }
 }
