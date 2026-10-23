@@ -6,6 +6,7 @@ import com.valoid.mobile.data.BundleOffer
 import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryDay
+import com.valoid.mobile.data.PlayerProfile
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
 import com.valoid.mobile.data.RiotException
@@ -36,6 +37,9 @@ data class ShopUiState(
     val history: List<HistoryDay> = emptyList(),
     val historyLoading: Boolean = false,
     val historyError: String? = null,
+    val profile: PlayerProfile? = null,
+    val profileLoading: Boolean = false,
+    val profileError: String? = null,
 )
 
 data class DetailUiState(
@@ -156,6 +160,7 @@ class ShopViewModel(
                 val created = riot.createSession(accessToken, idToken, _state.value.region)
                 session = created
                 _state.update { it.copy(connected = true, region = created.region) }
+                loadProfile()
                 refresh(uid)
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message ?: "Gagal terhubung ke Riot") }
@@ -203,6 +208,21 @@ class ShopViewModel(
             personalDays = fullHistory.size,
             lastSeenByYou = seenDays.maxOfOrNull { it.date },
         )
+    }
+
+    fun loadProfile() {
+        val s = session ?: return
+        _state.update { it.copy(profileLoading = true, profileError = null) }
+        viewModelScope.launch {
+            val result = runCatching { riot.loadProfile(s) }
+            _state.update {
+                it.copy(
+                    profileLoading = false,
+                    profile = result.getOrNull() ?: it.profile,
+                    profileError = result.exceptionOrNull()?.message,
+                )
+            }
+        }
     }
 
     fun loadHistory(uid: String) {

@@ -122,3 +122,24 @@ data class SkinStats(
     val personalDays: Int,
     val lastSeenByYou: String?,
 )
+
+/** Rank kompetitif pada satu act. [tier] 0 berarti belum ber-rank. */
+data class RankInfo(
+    val tier: Int,
+    val tierName: String,
+    val iconUrl: String?,
+    val color: Long?,
+    val rankedRating: Int?,
+    val seasonLabel: String?,
+)
+
+data class PlayerProfile(
+    val gameName: String?,
+    val tagLine: String?,
+    val level: Int?,
+    val title: String?,
+    val cardWideArt: String?,
+    val cardSmallArt: String?,
+    val currentRank: RankInfo?,
+    val peakRank: RankInfo?,
+)

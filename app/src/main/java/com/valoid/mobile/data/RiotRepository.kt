@@ -178,6 +178,109 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         )
     }
 
+    /** Profil pemain: nama#tag, level, kartu, title, rank act terakhir, dan peak rank. Bagian yang gagal dibiarkan kosong. */
+    suspend fun loadProfile(session: RiotSession): PlayerProfile = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val name = async {
+                runCatching {
+                    get(
+                        pd(session, "name-service/v2/players")
+                            .put("[\"${session.puuid}\"]".toRequestBody(JSON))
+                            .build(),
+                    ).jsonArray.first().jsonObject
+                }.getOrNull()
+            }
+            val level = async {
+                runCatching {
+                    get(pd(session, "account-xp/v1/players/${session.puuid}").build())
+                        .jsonObject["Progress"]?.jsonObject?.get("Level")?.jsonPrimitive?.intOrNull
+                }.getOrNull()
+            }
+            val identity = async {
+                runCatching {
+                    val loadout = try {
+                        get(pd(session, "personalization/v2/players/${session.puuid}/playerloadout").build())
+                    } catch (e: RiotException) {
+                        if (e.sessionExpired) throw e
+                        get(pd(session, "personalization/v3/players/${session.puuid}/playerloadout").build())
+                    }
+                    loadout.jsonObject["Identity"]?.jsonObject
+                }.getOrNull()
+            }
+            val ranks = async {
+                runCatching { parseRanks(get(pd(session, "mmr/v1/players/${session.puuid}").build()).jsonObject) }.getOrNull()
+            }
+
+            val card = identity.await()?.str("PlayerCardID")?.let { apiData("playercards/$it") }
+            val title = identity.await()?.str("PlayerTitleID")?.let { apiData("playertitles/$it") }?.str("titleText")
+            val (current, peak) = ranks.await() ?: (null to null)
+            PlayerProfile(
+                gameName = name.await()?.str("GameName"),
+                tagLine = name.await()?.str("TagLine"),
+                level = level.await() ?: identity.await()?.get("AccountLevel")?.jsonPrimitive?.intOrNull,
+                title = title,
+                cardWideArt = card?.str("wideArt"),
+                cardSmallArt = card?.str("smallArt") ?: card?.str("displayIcon"),
+                currentRank = current?.let { rankInfo(it) },
+                peakRank = peak?.let { rankInfo(it) },
+            )
+        }
+    }
+
+    internal class RawRank(val tier: Int, val rankedRating: Int?, val seasonId: String?)
+
+    /**
+     * Dari respons `mmr/v1/players`: rank terakhir (LatestCompetitiveUpdate) dan peak rank, yaitu tier
+     * tertinggi yang pernah dimenangkan atau dicapai di semua act.
+     */
+    internal fun parseRanks(mmr: JsonObject): Pair<RawRank?, RawRank?> {
+        val latest = mmr["LatestCompetitiveUpdate"] as? JsonObject
+        val current = latest?.let {
+            val tier = it["TierAfterUpdate"]?.jsonPrimitive?.intOrNull ?: 0
+            if (tier > 0) RawRank(tier, it["RankedRatingAfterUpdate"]?.jsonPrimitive?.intOrNull, it.str("SeasonID")) else null
+        }
+        val seasonal = ((mmr["QueueSkills"] as? JsonObject)?.get("competitive") as? JsonObject)
+            ?.get("SeasonalInfoBySeasonID") as? JsonObject
+        val peak = seasonal?.entries?.flatMap { (seasonId, info) ->
+            val o = info as? JsonObject ?: return@flatMap emptyList()
+            val won = (o["WinsByTier"] as? JsonObject)?.entries
+                ?.filter { (_, wins) -> (wins.jsonPrimitive.intOrNull ?: 0) > 0 }
+                ?.mapNotNull { (tier, _) -> tier.toIntOrNull() }
+                .orEmpty()
+            (won + listOfNotNull(o["CompetitiveTier"]?.jsonPrimitive?.intOrNull)).map { it to seasonId }
+        }?.filter { it.first > 0 }?.maxByOrNull { it.first }
+            ?.let { (tier, seasonId) -> RawRank(tier, null, seasonId) }
+        return current to (peak ?: current?.let { RawRank(it.tier, null, it.seasonId) })
+    }
+
+    /** Nama, ikon, dan warna tier memakai set tier milik act tersebut (ikon berbeda per episode). */
+    internal fun rankInfo(raw: RawRank): RankInfo {
+        val seasons = apiList("seasons").map { it.jsonObject }
+        val act = seasons.firstOrNull { it.str("uuid").equals(raw.seasonId, ignoreCase = true) }
+        val episode = act?.str("parentUuid")?.let { parent -> seasons.firstOrNull { it.str("uuid") == parent } }
+        val tierSets = apiList("competitivetiers").map { it.jsonObject }
+        val setId = apiList("seasons/competitive").map { it.jsonObject }
+            .firstOrNull { it.str("seasonUuid").equals(raw.seasonId, ignoreCase = true) }?.str("competitiveTiersUuid")
+        val set = tierSets.firstOrNull { it.str("uuid") == setId } ?: tierSets.lastOrNull()
+        val tier = set?.get("tiers")?.jsonArray?.map { it.jsonObject }
+            ?.firstOrNull { it["tier"]?.jsonPrimitive?.intOrNull == raw.tier }
+        return RankInfo(
+            tier = raw.tier,
+            tierName = tier?.str("tierName") ?: "TIER ${raw.tier}",
+            iconUrl = tier?.str("largeIcon") ?: tier?.str("smallIcon"),
+            color = tier?.str("color")?.take(6)?.toLongOrNull(16)?.let { 0xFF000000 or it },
+            rankedRating = raw.rankedRating,
+            seasonLabel = act?.let { a -> listOfNotNull(episode?.str("displayName"), a.str("displayName")).joinToString(" // ") },
+        )
+    }
+
+    private val apiListCache = ConcurrentHashMap<String, JsonArray>()
+
+    /** Array `data` dari valorant-api.com/v1/<path>, di-cache. */
+    private fun apiList(path: String): JsonArray = apiListCache[path] ?: runCatching {
+        get(Request.Builder().url("https://valorant-api.com/v1/$path").build()).jsonObject["data"]!!.jsonArray
+    }.getOrElse { JsonArray(emptyList()) }.also { if (it.isNotEmpty()) apiListCache[path] = it }
+
     /** Mengubah satu entri `FeaturedBundle.Bundles` dari Riot menjadi [BundleOffer]. */
     internal suspend fun parseBundle(b: JsonObject, fallbackRemaining: Long): BundleOffer = withContext(Dispatchers.IO) {
         val id = (b["DataAssetID"] ?: b["ID"])!!.jsonPrimitive.content

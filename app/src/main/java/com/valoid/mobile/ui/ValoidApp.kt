@@ -36,7 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
 
-private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"), FAVORITES("Favorit"), HISTORY("Riwayat") }
+private enum class Tab(val label: String) { PROFILE("Profil"), SHOP("Toko"), NIGHT("Night"), FAVORITES("Favorit"), HISTORY("Riwayat") }
 
 @Composable
 fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
@@ -199,6 +199,12 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     state = shop,
                     onRegion = shopVm::setRegion,
                     onConnect = { showRiotLogin = true },
+                )
+                tab == Tab.PROFILE -> ProfileScreen(
+                    profile = shop.profile,
+                    loading = shop.profileLoading,
+                    error = shop.profileError,
+                    onRefresh = shopVm::loadProfile,
                 )
                 tab == Tab.SHOP -> OfferListScreen(
                     title = "Toko harian",
