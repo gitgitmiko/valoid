@@ -77,10 +77,6 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     val favoriteIds = favorites.map { it.id }.toSet()
-    val statsLabel: (SkinOffer) -> String? = { offer ->
-        if (shop.globalShops < MIN_SHOPS_FOR_PERCENT) null
-        else "Muncul di ~${formatPercent((shop.globalCounts[offer.id.lowercase()] ?: 0) * 100.0 / shop.globalShops)} toko"
-    }
     val front = shop.storefront
     val storeOffers = front?.let { f -> f.daily.map { it to f.dailyEndsAtMillis } + f.nightMarket.map { it to f.nightMarketEndsAtMillis } }.orEmpty()
     val inStoreIds = storeOffers.map { it.first.id.lowercase() }.toSet()
@@ -215,7 +211,6 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     onOfferClick = { shopVm.openDetail(it, shop.storefront?.dailyEndsAtMillis ?: 0) },
                     favoriteIds = favoriteIds,
                     onToggleFavorite = { toggleFavorite(it.id, it.name, it.iconUrl) },
-                    statsLabel = statsLabel,
                     header = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             shop.wallet?.let { WalletBar(it) }
@@ -242,7 +237,6 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     onOfferClick = { shopVm.openDetail(it, shop.storefront?.nightMarketEndsAtMillis ?: 0) },
                     favoriteIds = favoriteIds,
                     onToggleFavorite = { toggleFavorite(it.id, it.name, it.iconUrl) },
-                    statsLabel = statsLabel,
                 )
             }
         }

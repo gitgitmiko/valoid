@@ -116,13 +116,9 @@ data class FavoriteSkin(val id: String, val name: String, val iconUrl: String?)
 /** Ringkasan skin dari katalog untuk pencarian. */
 data class SkinSummary(val id: String, val name: String, val iconUrl: String?)
 
-/** Statistik kemunculan skin. Global: dari semua toko yang tercatat di Valoid. Pribadi: dari riwayatmu. */
+/** Statistik kemunculan skin di toko pengguna, dihitung dari riwayatnya sendiri. */
 data class SkinStats(
-    val globalCount: Int,
-    val globalShops: Int,
     val personalCount: Int,
     val personalDays: Int,
     val lastSeenByYou: String?,
-) {
-    val globalPercent: Double? get() = if (globalShops > 0) globalCount * 100.0 / globalShops else null
-}
+)

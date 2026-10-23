@@ -1,10 +1,8 @@
 package com.valoid.mobile.data
 
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -17,9 +15,8 @@ class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
         db.collection("users").document(uid).collection("shopHistory")
 
     /**
-     * Mencatat toko harian untuk rotasi [date] sekali saja. Pencatatan pertama juga menaikkan
-     * statistik global (stats/global dan skinStats/{id}); rules Firestore memastikan penghitung
-     * hanya naik bersamaan dengan riwayat baru. Mengembalikan true bila rotasi baru tercatat.
+     * Mencatat toko harian untuk rotasi [date] sekali saja; riwayat tidak bisa diubah setelah dibuat.
+     * Mengembalikan true bila rotasi baru tercatat.
      */
     suspend fun saveDay(uid: String, date: String, offers: List<SkinOffer>): Boolean {
         val dayRef = collection(uid).document(date)
@@ -35,18 +32,6 @@ class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
                     },
                 ),
             )
-            tx.set(
-                db.collection("stats").document("global"),
-                mapOf("shops" to FieldValue.increment(1), "lastDate" to date),
-                SetOptions.merge(),
-            )
-            offers.distinctBy { it.id.lowercase() }.forEach {
-                tx.set(
-                    db.collection("skinStats").document(it.id.lowercase()),
-                    mapOf("count" to FieldValue.increment(1), "name" to it.name, "iconUrl" to it.iconUrl, "lastSeen" to date),
-                    SetOptions.merge(),
-                )
-            }
             true
         }.await()
     }

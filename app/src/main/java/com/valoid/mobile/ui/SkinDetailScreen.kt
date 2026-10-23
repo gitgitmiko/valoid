@@ -307,16 +307,6 @@ private fun StatsCard(stats: SkinStats?, accent: Color) {
                 Text("Memuat statistik...")
                 return@Column
             }
-            val percent = stats.globalPercent
-            StatRow(
-                label = "Peluang muncul di toko",
-                value = when {
-                    stats.globalShops < MIN_SHOPS_FOR_PERCENT || percent == null -> "Data belum cukup"
-                    else -> "~${formatPercent(percent)}"
-                },
-                note = "Dari ${formatAmount(stats.globalShops)} toko pengguna Valoid; muncul ${formatAmount(stats.globalCount)} kali",
-                accent = accent,
-            )
             StatRow(
                 label = "Muncul di tokomu",
                 value = if (stats.personalDays == 0) "-" else "${stats.personalCount} kali",

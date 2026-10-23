@@ -6,13 +6,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // True bila tulisan ini sekaligus membuat riwayat toko baru milik pengguna untuk rotasi `date`.
-    // Mencegah penghitung statistik dinaikkan tanpa mencatat toko baru.
-    function recordsNewShop(date) {
-      let path = /databases/$(database)/documents/users/$(request.auth.uid)/shopHistory/$(date);
-      return date is string && !exists(path) && existsAfter(path);
-    }
-
     match /users/{uid}/favorites/{skinId} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
@@ -24,22 +17,6 @@ service cloud.firestore {
         && request.resource.data.date == date
         && request.resource.data.offers is list
         && request.resource.data.offers.size() <= 8;
-    }
-
-    match /stats/global {
-      allow read: if signedIn();
-      allow write: if signedIn()
-        && request.resource.data.keys().hasOnly(['shops', 'lastDate'])
-        && request.resource.data.shops == (resource == null ? 0 : resource.data.shops) + 1
-        && recordsNewShop(request.resource.data.lastDate);
-    }
-
-    match /skinStats/{skinId} {
-      allow read: if signedIn();
-      allow write: if signedIn()
-        && request.resource.data.keys().hasOnly(['count', 'name', 'iconUrl', 'lastSeen'])
-        && request.resource.data.count == (resource == null ? 0 : resource.data.count) + 1
-        && recordsNewShop(request.resource.data.lastSeen);
     }
   }
 }
