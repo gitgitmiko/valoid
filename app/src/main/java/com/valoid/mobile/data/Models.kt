@@ -104,3 +104,9 @@ data class AccessoryOffer(
     val amount: Int,
     val cost: Int,
 )
+
+/** Skin favorit; [id] adalah UUID level pertama skin (sama dengan OfferID toko), huruf kecil. */
+data class FavoriteSkin(val id: String, val name: String, val iconUrl: String?)
+
+/** Ringkasan skin dari katalog untuk pencarian. */
+data class SkinSummary(val id: String, val name: String, val iconUrl: String?)

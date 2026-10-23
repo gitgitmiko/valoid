@@ -58,7 +58,12 @@ import coil.compose.AsyncImage
 import com.valoid.mobile.data.SkinDetail
 
 @Composable
-fun SkinDetailScreen(state: DetailUiState, onBack: () -> Unit) {
+fun SkinDetailScreen(
+    state: DetailUiState,
+    onBack: () -> Unit,
+    favorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
+) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -109,6 +114,7 @@ fun SkinDetailScreen(state: DetailUiState, onBack: () -> Unit) {
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
+            FavoriteButton(favorite, onClick = onToggleFavorite)
         }
         when {
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -182,9 +188,9 @@ private fun DetailContent(
                             Text(tier.name, color = accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
-                    Row(verticalAlignment = Alignment.Bottom) {
+                    if (state.endsAtMillis > 0) Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            "${offer.discountedCost ?: offer.cost} VP",
+                            "${formatAmount(offer.discountedCost ?: offer.cost)} VP",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
@@ -197,7 +203,11 @@ private fun DetailContent(
                             )
                         }
                     }
-                    Text("Keluar dari toko dalam ${formatCountdown(secondsLeft)}")
+                    if (state.endsAtMillis > 0) {
+                        Text("Keluar dari toko dalam ${formatCountdown(secondsLeft)}")
+                    } else {
+                        Text("Tidak ada di tokomu saat ini", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    }
                 }
             }
         }

@@ -14,8 +14,8 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.4.0"
+        versionCode = 14
+        versionName = "0.5.0"
     }
 
     buildTypes {
@@ -50,6 +50,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")

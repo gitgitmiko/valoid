@@ -15,7 +15,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -170,5 +175,16 @@ private fun AccessoryCard(item: AccessoryOffer, modifier: Modifier) {
                 Text(" ${formatAmount(item.cost)}", fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+}
+
+@Composable
+fun FavoriteButton(favorite: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            contentDescription = if (favorite) "Hapus dari favorit" else "Tambah ke favorit",
+            tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

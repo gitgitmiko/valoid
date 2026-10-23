@@ -36,14 +36,17 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
      * Meminta token baru memakai cookie sesi Riot yang tersimpan. Mengembalikan null bila cookie
      * tidak ada atau sudah tidak berlaku (Riot mengarahkan ke halaman login).
      */
-    suspend fun reauthenticate(): RiotAuth.Tokens? = withContext(Dispatchers.IO) {
-        val cookies = RiotAuth.cookieHeader()?.takeIf { it.contains("ssid=") } ?: return@withContext null
-        noRedirects.newCall(
-            Request.Builder().url(RiotAuth.AUTH_URL).header("Cookie", cookies).build(),
-        ).execute().use { response ->
-            RiotAuth.storeCookies(response.headers("Set-Cookie"))
-            RiotAuth.parseRedirect(response.header("Location"))
+    suspend fun reauthenticate(): RiotAuth.Tokens? {
+        // CookieManager diakses di main thread agar aman juga saat dipanggil dari worker latar.
+        val cookies = withContext(Dispatchers.Main) { RiotAuth.cookieHeader() }
+            ?.takeIf { it.contains("ssid=") } ?: return null
+        val (setCookies, location) = withContext(Dispatchers.IO) {
+            noRedirects.newCall(
+                Request.Builder().url(RiotAuth.AUTH_URL).header("Cookie", cookies).build(),
+            ).execute().use { it.headers("Set-Cookie") to it.header("Location") }
         }
+        withContext(Dispatchers.Main) { RiotAuth.storeCookies(setCookies) }
+        return RiotAuth.parseRedirect(location)
     }
 
     private data class SkinInfo(val name: String, val iconUrl: String?)

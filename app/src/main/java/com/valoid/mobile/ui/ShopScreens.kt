@@ -76,6 +76,8 @@ fun OfferListScreen(
     onOfferClick: (SkinOffer) -> Unit,
     header: @Composable () -> Unit = {},
     footer: @Composable () -> Unit = {},
+    favoriteIds: Set<String> = emptySet(),
+    onToggleFavorite: (SkinOffer) -> Unit = {},
 ) {
     val secondsLeft = rememberSecondsLeft(endsAtMillis)
     // Muat ulang otomatis begitu toko berganti.
@@ -109,14 +111,21 @@ fun OfferListScreen(
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
             offers.isEmpty() -> item { Text(emptyText, Modifier.padding(vertical = 48.dp)) }
-            else -> items(offers, key = { it.id }) { SkinCard(it, onClick = { onOfferClick(it) }) }
+            else -> items(offers, key = { it.id }) {
+                SkinCard(
+                    it,
+                    favorite = it.id.lowercase() in favoriteIds,
+                    onClick = { onOfferClick(it) },
+                    onToggleFavorite = { onToggleFavorite(it) },
+                )
+            }
         }
         item { footer() }
     }
 }
 
 @Composable
-private fun SkinCard(offer: SkinOffer, onClick: () -> Unit) {
+private fun SkinCard(offer: SkinOffer, favorite: Boolean, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
@@ -125,7 +134,7 @@ private fun SkinCard(offer: SkinOffer, onClick: () -> Unit) {
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.size(96.dp, 64.dp),
             )
-            Column(Modifier.padding(start = 12.dp)) {
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(offer.name, fontWeight = FontWeight.Bold)
                 if (offer.discountedCost != null) {
                     Text("${formatAmount(offer.discountedCost)} VP  (-${offer.discountPercent}%)", color = MaterialTheme.colorScheme.primary)
@@ -134,6 +143,7 @@ private fun SkinCard(offer: SkinOffer, onClick: () -> Unit) {
                     Text("${formatAmount(offer.cost)} VP")
                 }
             }
+            FavoriteButton(favorite, onClick = onToggleFavorite)
         }
     }
 }

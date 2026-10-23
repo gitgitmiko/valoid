@@ -1,5 +1,9 @@
 package com.valoid.mobile.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,12 +23,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.data.SkinOffer
+import com.valoid.mobile.notify.StoreNotifications
 
-private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"), HISTORY("Riwayat") }
+private enum class Tab(val label: String) { SHOP("Toko"), NIGHT("Night Market"), FAVORITES("Favorit"), HISTORY("Riwayat") }
 
 @Composable
 fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
@@ -32,6 +38,10 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val shop by shopVm.state.collectAsStateWithLifecycle()
     val detail by shopVm.detail.collectAsStateWithLifecycle()
     val bundle by shopVm.bundle.collectAsStateWithLifecycle()
+    val favorites by shopVm.favorites.collectAsStateWithLifecycle()
+    val skinCatalog by shopVm.skinCatalog.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
 
@@ -52,14 +62,40 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         return
     }
 
-    LaunchedEffect(uid) { shopVm.autoConnect(uid) }
+    LaunchedEffect(uid) {
+        shopVm.autoConnect(uid)
+        shopVm.watchFavorites(uid)
+    }
+
+    val favoriteIds = favorites.map { it.id }.toSet()
+    val front = shop.storefront
+    val storeOffers = front?.let { f -> f.daily.map { it to f.dailyEndsAtMillis } + f.nightMarket.map { it to f.nightMarketEndsAtMillis } }.orEmpty()
+    val inStoreIds = storeOffers.map { it.first.id.lowercase() }.toSet()
+
+    fun toggleFavorite(id: String, name: String, iconUrl: String?) {
+        val added = shopVm.toggleFavorite(uid, id, name, iconUrl)
+        // Minta izin notifikasi saat pertama kali memfavoritkan skin.
+        if (added && !StoreNotifications.canNotify(context) && Build.VERSION.SDK_INT >= 33) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /** Membuka detail; bila skin sedang di toko, harga dan sisa waktunya ikut ditampilkan. */
+    fun openSkin(id: String, name: String, iconUrl: String?) {
+        val inStore = storeOffers.firstOrNull { it.first.id.equals(id, ignoreCase = true) }
+        if (inStore != null) shopVm.openDetail(inStore.first, inStore.second) else shopVm.openDetail(SkinOffer(id, name, iconUrl, 0), 0)
+    }
 
     detail?.let {
-        SkinDetailScreen(it, onBack = shopVm::closeDetail)
+        SkinDetailScreen(
+            it,
+            onBack = shopVm::closeDetail,
+            favorite = it.offer.id.lowercase() in favoriteIds,
+            onToggleFavorite = { toggleFavorite(it.offer.id, it.detail?.name ?: it.offer.name, it.offer.iconUrl) },
+        )
         return
     }
 
-    val front = shop.storefront
     bundle?.let { b ->
         val endsAt = front?.endsAtMillis(b) ?: 0
         BundleDetailScreen(
@@ -73,6 +109,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
 
     LaunchedEffect(tab, uid) {
         if (tab == Tab.HISTORY) shopVm.loadHistory(uid)
+        if (tab == Tab.FAVORITES) shopVm.loadCatalog()
     }
 
     Scaffold(
@@ -94,7 +131,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         bottomBar = {
             NavigationBar {
                 Tab.entries.forEach { t ->
-                    NavigationBarItem(selected = tab == t, onClick = { tab = t }, icon = {}, label = { Text(t.label) })
+                    NavigationBarItem(selected = tab == t, onClick = { tab = t }, icon = {}, label = { Text(t.label, maxLines = 1) })
                 }
             }
         },
@@ -106,6 +143,13 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     loading = shop.historyLoading,
                     error = shop.historyError,
                     onRefresh = { shopVm.loadHistory(uid) },
+                )
+                tab == Tab.FAVORITES -> FavoritesScreen(
+                    favorites = favorites,
+                    catalog = skinCatalog,
+                    inStoreIds = inStoreIds,
+                    onToggle = ::toggleFavorite,
+                    onOpen = ::openSkin,
                 )
                 !shop.connected -> ConnectRiotPrompt(
                     state = shop,
@@ -121,6 +165,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     error = shop.error,
                     onRefresh = { shopVm.refresh(uid) },
                     onOfferClick = { shopVm.openDetail(it, shop.storefront?.dailyEndsAtMillis ?: 0) },
+                    favoriteIds = favoriteIds,
+                    onToggleFavorite = { toggleFavorite(it.id, it.name, it.iconUrl) },
                     header = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             shop.wallet?.let { WalletBar(it) }
@@ -145,6 +191,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     error = shop.error,
                     onRefresh = { shopVm.refresh(uid) },
                     onOfferClick = { shopVm.openDetail(it, shop.storefront?.nightMarketEndsAtMillis ?: 0) },
+                    favoriteIds = favoriteIds,
+                    onToggleFavorite = { toggleFavorite(it.id, it.name, it.iconUrl) },
                 )
             }
         }

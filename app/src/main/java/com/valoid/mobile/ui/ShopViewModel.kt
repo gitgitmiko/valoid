@@ -3,6 +3,8 @@ package com.valoid.mobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.valoid.mobile.data.BundleOffer
+import com.valoid.mobile.data.FavoriteSkin
+import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
@@ -13,9 +15,12 @@ import com.valoid.mobile.data.RiotSession
 import com.valoid.mobile.data.SkinCatalogRepository
 import com.valoid.mobile.data.SkinDetail
 import com.valoid.mobile.data.SkinOffer
+import com.valoid.mobile.data.SkinSummary
 import com.valoid.mobile.data.Storefront
 import com.valoid.mobile.data.Wallet
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,7 +54,42 @@ class ShopViewModel(
     private val riot: RiotRepository = RiotRepository(),
     private val history: HistoryRepository = HistoryRepository(),
     private val catalog: SkinCatalogRepository = SkinCatalogRepository(),
+    private val favoritesRepo: FavoritesRepository = FavoritesRepository(),
 ) : ViewModel() {
+
+    private val _favorites = MutableStateFlow<List<FavoriteSkin>>(emptyList())
+    val favorites: StateFlow<List<FavoriteSkin>> = _favorites
+    private var favoritesJob: Job? = null
+
+    private val _catalog = MutableStateFlow<List<SkinSummary>>(emptyList())
+    val skinCatalog: StateFlow<List<SkinSummary>> = _catalog
+
+    fun watchFavorites(uid: String) {
+        if (favoritesJob != null) return
+        favoritesJob = viewModelScope.launch {
+            favoritesRepo.favorites(uid).catch { }.collect { _favorites.value = it }
+        }
+    }
+
+    /** Menambah atau menghapus favorit; mengembalikan true bila skin baru saja difavoritkan. */
+    fun toggleFavorite(uid: String, id: String, name: String, iconUrl: String?): Boolean {
+        val key = id.lowercase()
+        val wasFavorite = _favorites.value.any { it.id == key }
+        _favorites.update { list ->
+            if (wasFavorite) list.filterNot { it.id == key } else list + FavoriteSkin(key, name, iconUrl)
+        }
+        viewModelScope.launch {
+            runCatching {
+                if (wasFavorite) favoritesRepo.remove(uid, key) else favoritesRepo.add(uid, FavoriteSkin(key, name, iconUrl))
+            }
+        }
+        return !wasFavorite
+    }
+
+    fun loadCatalog() {
+        if (_catalog.value.isNotEmpty()) return
+        viewModelScope.launch { runCatching { catalog.allSkins() }.onSuccess { _catalog.value = it } }
+    }
 
     private val _detail = MutableStateFlow<DetailUiState?>(null)
     val detail: StateFlow<DetailUiState?> = _detail
@@ -161,6 +201,9 @@ class ShopViewModel(
     fun disconnectRiot() {
         session = null
         RiotAuth.clear()
+        favoritesJob?.cancel()
+        favoritesJob = null
+        _favorites.value = emptyList()
         _state.update { ShopUiState(region = it.region, history = it.history) }
     }
 }

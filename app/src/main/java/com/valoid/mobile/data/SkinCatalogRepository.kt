@@ -56,6 +56,20 @@ class SkinCatalogRepository(private val client: OkHttpClient = OkHttpClient()) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
     private var skinsByLevel: Map<String, ApiSkin>? = null
+    private var summaries: List<SkinSummary>? = null
+
+    /** Semua skin yang bisa dibeli (punya tier), diurutkan berdasarkan nama. */
+    suspend fun allSkins(): List<SkinSummary> = withContext(Dispatchers.IO) {
+        summaries ?: load().first.values
+            .distinctBy { it.uuid }
+            .filter { it.contentTierUuid != null && it.levels.isNotEmpty() }
+            .map { skin ->
+                val level = skin.levels.first()
+                SkinSummary(level.uuid.lowercase(), skin.displayName, level.displayIcon ?: skin.displayIcon)
+            }
+            .sortedBy { it.name }
+            .also { summaries = it }
+    }
     private var tiers: Map<String, ApiTier>? = null
 
     suspend fun detail(levelId: String): SkinDetail = withContext(Dispatchers.IO) {
