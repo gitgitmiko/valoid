@@ -10,6 +10,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
@@ -591,7 +593,28 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         fun spray(id: String?, equipped: Boolean) = sprayDefs[id?.lowercase()]?.let {
             CollectionItem(id!!.lowercase(), it.str("displayName") ?: "Spray", it.str("fullTransparentIcon") ?: it.str("displayIcon"), equipped)
         }
-        val equippedSprayIds = loadout["Sprays"]?.jsonArray.orEmpty().mapNotNull { it.jsonObject.str("SprayID")?.lowercase() }
+        val flexDefs = apiList("flex").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
+        fun expression(id: String) = spray(id, true) ?: flexDefs[id]?.let {
+            CollectionItem(id, it.str("displayName") ?: "Flex", it.str("displayIcon"), true)
+        }
+        // Format lama: "Sprays". Format baru (roda ekspresi): "Expressions.AESSelections" berisi spray dan flex.
+        // Bila keduanya tidak ada, pindai seluruh loadout untuk ID spray/flex yang dikenal.
+        val legacySprays = (loadout["Sprays"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.str("SprayID")?.lowercase() }
+        val expressionIds = ((loadout["Expressions"] as? JsonObject)?.get("AESSelections") as? JsonArray).orEmpty()
+            .mapNotNull { (it as? JsonObject)?.str("AssetID")?.lowercase() }
+        val equippedExpressionIds = legacySprays.ifEmpty { expressionIds }.ifEmpty {
+            val found = LinkedHashSet<String>()
+            fun scan(e: JsonElement) {
+                when (e) {
+                    is JsonObject -> e.forEach { (key, value) -> if (key != "Guns" && key != "Identity") scan(value) }
+                    is JsonArray -> e.forEach(::scan)
+                    is JsonPrimitive -> e.contentOrNull?.lowercase()?.let { if (it in sprayDefs || it in flexDefs) found += it }
+                }
+            }
+            scan(loadout)
+            found.toList()
+        }
+        val equippedSprayIds = equippedExpressionIds.filter { it in sprayDefs }
 
         val buddyLevels = apiList("buddies/levels").map { it.jsonObject }.associateBy { it.str("uuid")?.lowercase() }
         // Nama level buddy sering berupa kode internal ("RankEP4_Iron"); pakai nama buddy induknya.
@@ -640,7 +663,7 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
             cardName = card?.str("displayName"),
             cardWideArt = card?.str("wideArt"),
             title = titleId?.let { titleDefs[it] }?.str("titleText"),
-            equippedSprays = equippedSprayIds.map { spray(it, true) },
+            equippedSprays = equippedExpressionIds.take(4).map { expression(it) },
             weapons = equipped,
             ownedSkins = owned[TYPE_SKIN].orEmpty().mapNotNull { skinByLevel[it]?.str("uuid") }.distinct().size,
             cards = ownedCards.mapNotNull { id ->

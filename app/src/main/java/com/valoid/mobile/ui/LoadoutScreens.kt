@@ -127,7 +127,7 @@ private fun LoadoutHome(c: PlayerCollection, onBack: () -> Unit, open: (LoadoutP
                 Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, onClick = { open(LoadoutPage.SPRAYS) }) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("SPRAY TERPASANG", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
+                            Text("EKSPRESI TERPASANG", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
                             Text("${c.equippedSprays.count { it != null }}/${c.equippedSprays.size.coerceAtLeast(4)}", style = MaterialTheme.typography.labelLarge)
                         }
                         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
