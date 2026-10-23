@@ -56,6 +56,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import coil.compose.AsyncImage
 import com.valoid.mobile.data.SkinDetail
+import com.valoid.mobile.data.SkinStats
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 @Composable
 fun SkinDetailScreen(
@@ -212,6 +218,9 @@ private fun DetailContent(
             }
         }
 
+        item { SectionTitle("Statistik") }
+        item { StatsCard(state.stats, accent) }
+
         if (detail.chromas.size > 1) {
             item { SectionTitle("Chroma") }
             item {
@@ -285,3 +294,64 @@ private fun SectionTitle(text: String) {
         modifier = Modifier.padding(horizontal = 16.dp),
     )
 }
+
+@Composable
+private fun StatsCard(stats: SkinStats?, accent: Color) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (stats == null) {
+                Text("Memuat statistik...")
+                return@Column
+            }
+            val percent = stats.globalPercent
+            StatRow(
+                label = "Peluang muncul di toko",
+                value = when {
+                    stats.globalShops < MIN_SHOPS_FOR_PERCENT || percent == null -> "Data belum cukup"
+                    else -> "~${formatPercent(percent)}"
+                },
+                note = "Dari ${formatAmount(stats.globalShops)} toko pengguna Valoid; muncul ${formatAmount(stats.globalCount)} kali",
+                accent = accent,
+            )
+            StatRow(
+                label = "Muncul di tokomu",
+                value = if (stats.personalDays == 0) "-" else "${stats.personalCount} kali",
+                note = if (stats.personalDays == 0) "Belum ada riwayat toko" else "Dari ${stats.personalDays} rotasi yang tercatat",
+                accent = accent,
+            )
+            StatRow(
+                label = "Terakhir di tokomu",
+                value = stats.lastSeenByYou?.let(::daysAgo) ?: "Belum pernah",
+                note = stats.lastSeenByYou?.let(::formatDate) ?: "Sejak riwayatmu mulai dicatat",
+                accent = accent,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, value: String, note: String, accent: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
+        Text(value, color = accent, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp))
+    }
+}
+
+private fun daysAgo(rotationDate: String): String {
+    val days = ChronoUnit.DAYS.between(LocalDate.parse(rotationDate), LocalDate.now(ZoneOffset.UTC))
+    return when {
+        days <= 0 -> "Hari ini"
+        days == 1L -> "Kemarin"
+        else -> "$days hari lalu"
+    }
+}
+
+private fun formatDate(rotationDate: String): String =
+    LocalDate.parse(rotationDate).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale("id", "ID")))

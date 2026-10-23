@@ -14,7 +14,6 @@ import com.valoid.mobile.data.HistoryRepository
 import com.valoid.mobile.data.RiotException
 import com.valoid.mobile.data.RiotRegion
 import com.valoid.mobile.data.RiotRepository
-import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,7 +29,7 @@ class StoreCheckWorker(context: Context, params: WorkerParameters) : CoroutineWo
         return try {
             val session = riot.createSession(tokens.accessToken, tokens.idToken, RiotRegion.AP)
             val front = riot.loadStorefront(session)
-            runCatching { HistoryRepository().saveDay(uid, LocalDate.now().toString(), front.daily) }
+            runCatching { HistoryRepository().saveDay(uid, front.rotationDate, front.daily) }
 
             val favoriteIds = FavoritesRepository().load(uid).map { it.id }.toSet()
             val matches = (front.daily + front.nightMarket)

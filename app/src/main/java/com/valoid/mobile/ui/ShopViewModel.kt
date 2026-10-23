@@ -15,7 +15,9 @@ import com.valoid.mobile.data.RiotSession
 import com.valoid.mobile.data.SkinCatalogRepository
 import com.valoid.mobile.data.SkinDetail
 import com.valoid.mobile.data.SkinOffer
+import com.valoid.mobile.data.SkinStats
 import com.valoid.mobile.data.SkinSummary
+import com.valoid.mobile.data.StatsRepository
 import com.valoid.mobile.data.Storefront
 import com.valoid.mobile.data.Wallet
 import kotlinx.coroutines.Job
@@ -24,7 +26,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 data class ShopUiState(
     val region: RiotRegion = RiotRegion.AP,
@@ -36,6 +37,9 @@ data class ShopUiState(
     val history: List<HistoryDay> = emptyList(),
     val historyLoading: Boolean = false,
     val historyError: String? = null,
+    /** Jumlah kemunculan global per skin (ID huruf kecil) dan total toko yang tercatat di Valoid. */
+    val globalCounts: Map<String, Int> = emptyMap(),
+    val globalShops: Int = 0,
 )
 
 data class DetailUiState(
@@ -44,6 +48,7 @@ data class DetailUiState(
     val detail: SkinDetail? = null,
     val loading: Boolean = true,
     val error: String? = null,
+    val stats: SkinStats? = null,
 )
 
 /**
@@ -55,6 +60,7 @@ class ShopViewModel(
     private val history: HistoryRepository = HistoryRepository(),
     private val catalog: SkinCatalogRepository = SkinCatalogRepository(),
     private val favoritesRepo: FavoritesRepository = FavoritesRepository(),
+    private val stats: StatsRepository = StatsRepository(),
 ) : ViewModel() {
 
     private val _favorites = MutableStateFlow<List<FavoriteSkin>>(emptyList())
@@ -107,6 +113,10 @@ class ShopViewModel(
 
     fun openDetail(offer: SkinOffer, endsAtMillis: Long) {
         _detail.value = DetailUiState(offer, endsAtMillis)
+        viewModelScope.launch {
+            val stats = runCatching { skinStats(offer.id) }.getOrNull()
+            _detail.update { current -> if (current?.offer?.id == offer.id) current.copy(stats = stats) else current }
+        }
         viewModelScope.launch {
             val result = runCatching { catalog.detail(offer.id) }
             _detail.update { current ->
@@ -167,7 +177,9 @@ class ShopViewModel(
                 _state.update { it.copy(loading = false, storefront = front) }
                 // Saldo tidak wajib: kegagalan dompet tidak menggagalkan toko.
                 runCatching { riot.loadWallet(s) }.onSuccess { w -> _state.update { it.copy(wallet = w) } }
-                runCatching { history.saveDay(uid, LocalDate.now().toString(), front.daily) }
+                runCatching { history.saveDay(uid, front.rotationDate, front.daily) }
+                fullHistory = runCatching { history.loadHistory(uid, limit = 400) }.getOrDefault(fullHistory)
+                loadGlobalStats((front.daily + front.nightMarket).map { it.id })
             } catch (e: RiotException) {
                 if (e.sessionExpired) {
                     session = null
@@ -184,6 +196,29 @@ class ShopViewModel(
                 _state.update { it.copy(loading = false, error = e.message ?: "Gagal memuat toko") }
             }
         }
+    }
+
+    /** Riwayat lengkap untuk statistik pribadi; dimuat setelah toko tercatat. */
+    private var fullHistory: List<HistoryDay> = emptyList()
+
+    private suspend fun loadGlobalStats(ids: List<String>) {
+        val shops = runCatching { stats.totalShops() }.getOrNull() ?: return
+        val counts = runCatching { stats.counts(ids) }.getOrDefault(emptyMap())
+        _state.update { it.copy(globalShops = shops, globalCounts = it.globalCounts + counts) }
+    }
+
+    private suspend fun skinStats(id: String): SkinStats {
+        val key = id.lowercase()
+        val shops = _state.value.globalShops.takeIf { it > 0 } ?: runCatching { stats.totalShops() }.getOrDefault(0)
+        val count = _state.value.globalCounts[key] ?: runCatching { stats.counts(listOf(key))[key] }.getOrNull() ?: 0
+        val seenDays = fullHistory.filter { day -> day.offers.any { it.id.equals(key, ignoreCase = true) } }
+        return SkinStats(
+            globalCount = count,
+            globalShops = shops,
+            personalCount = seenDays.size,
+            personalDays = fullHistory.size,
+            lastSeenByYou = seenDays.maxOfOrNull { it.date },
+        )
     }
 
     fun loadHistory(uid: String) {

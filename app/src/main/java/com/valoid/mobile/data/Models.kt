@@ -35,6 +35,11 @@ data class Storefront(
 ) {
     val accessoryEndsAtMillis: Long get() = fetchedAtMillis + accessoryRemainingSeconds * 1000
 
+    /** Tanggal (UTC) mulainya rotasi toko harian ini; toko berganti tiap 00:00 UTC. */
+    val rotationDate: String
+        get() = java.time.Instant.ofEpochMilli(dailyEndsAtMillis - 86_400_000 + 60_000)
+            .atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+
     fun endsAtMillis(bundle: BundleOffer): Long = fetchedAtMillis + bundle.remainingSeconds * 1000
 
     val dailyEndsAtMillis: Long get() = fetchedAtMillis + dailyRemainingSeconds * 1000
@@ -110,3 +115,14 @@ data class FavoriteSkin(val id: String, val name: String, val iconUrl: String?)
 
 /** Ringkasan skin dari katalog untuk pencarian. */
 data class SkinSummary(val id: String, val name: String, val iconUrl: String?)
+
+/** Statistik kemunculan skin. Global: dari semua toko yang tercatat di Valoid. Pribadi: dari riwayatmu. */
+data class SkinStats(
+    val globalCount: Int,
+    val globalShops: Int,
+    val personalCount: Int,
+    val personalDays: Int,
+    val lastSeenByYou: String?,
+) {
+    val globalPercent: Double? get() = if (globalShops > 0) globalCount * 100.0 / globalShops else null
+}

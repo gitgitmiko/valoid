@@ -78,6 +78,7 @@ fun OfferListScreen(
     footer: @Composable () -> Unit = {},
     favoriteIds: Set<String> = emptySet(),
     onToggleFavorite: (SkinOffer) -> Unit = {},
+    statsLabel: (SkinOffer) -> String? = { null },
 ) {
     val secondsLeft = rememberSecondsLeft(endsAtMillis)
     // Muat ulang otomatis begitu toko berganti.
@@ -114,6 +115,7 @@ fun OfferListScreen(
             else -> items(offers, key = { it.id }) {
                 SkinCard(
                     it,
+                    statsLabel = statsLabel(it),
                     favorite = it.id.lowercase() in favoriteIds,
                     onClick = { onOfferClick(it) },
                     onToggleFavorite = { onToggleFavorite(it) },
@@ -125,7 +127,13 @@ fun OfferListScreen(
 }
 
 @Composable
-private fun SkinCard(offer: SkinOffer, favorite: Boolean, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
+private fun SkinCard(
+    offer: SkinOffer,
+    statsLabel: String?,
+    favorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
@@ -141,6 +149,9 @@ private fun SkinCard(offer: SkinOffer, favorite: Boolean, onClick: () -> Unit, o
                     Text("${formatAmount(offer.cost)} VP", style = MaterialTheme.typography.bodySmall)
                 } else {
                     Text("${formatAmount(offer.cost)} VP")
+                }
+                statsLabel?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             }
             FavoriteButton(favorite, onClick = onToggleFavorite)

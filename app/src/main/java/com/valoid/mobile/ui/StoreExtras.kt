@@ -188,3 +188,10 @@ fun FavoriteButton(favorite: Boolean, onClick: () -> Unit) {
         )
     }
 }
+
+/** 1.0 -> "1,0%"; persentase kecil tetap terbaca. */
+fun formatPercent(value: Double): String =
+    if (value > 0 && value < 0.1) "<0,1%" else String.format(Locale("id", "ID"), "%.1f%%", value)
+
+/** Jumlah toko minimum sebelum persentase global ditampilkan; di bawahnya angka masih menyesatkan. */
+const val MIN_SHOPS_FOR_PERCENT = 20
