@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.google.firebase.auth.FirebaseAuth
+import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryRepository
 import com.valoid.mobile.data.RiotException
@@ -31,6 +32,8 @@ class StoreCheckWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val front = riot.loadStorefront(session)
             runCatching { HistoryRepository().saveDay(uid, front.rotationDate, front.daily) }
 
+            // Notifikasi skin favorit hanya untuk pengguna Valoid Pro.
+            if (!ProManager.isProCached(applicationContext)) return Result.success()
             val favoriteIds = FavoritesRepository().load(uid).map { it.id }.toSet()
             val matches = (front.daily + front.nightMarket)
                 .filter { it.id.lowercase() in favoriteIds }

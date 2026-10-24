@@ -121,6 +121,11 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val inStoreIds = storeOffers.map { it.first.id.lowercase() }.toSet()
 
     fun toggleFavorite(id: String, name: String, iconUrl: String?) {
+        // Skin favorit adalah fitur Valoid Pro.
+        if (!isPro) {
+            showPaywall = true
+            return
+        }
         val added = shopVm.toggleFavorite(uid, id, name, iconUrl)
         // Minta izin notifikasi saat pertama kali memfavoritkan skin.
         if (added && !StoreNotifications.canNotify(context) && Build.VERSION.SDK_INT >= 33) {
@@ -241,7 +246,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         }
         return
     }
-    if (showFavorites) {
+    if (showFavorites && isPro) {
         LaunchedEffect(Unit) { shopVm.loadCatalog() }
         SubPage("Favorit", onBack = { showFavorites = false }) {
             FavoritesScreen(favorites = favorites, catalog = skinCatalog, inStoreIds = inStoreIds, onToggle = ::toggleFavorite, onOpen = ::openSkin)
@@ -331,7 +336,9 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ShopShortcut("Night Market", Icons.Filled.Star, enabled = nightAvailable, highlight = nightAvailable) { showNight = true }
-                                ShopShortcut("Favorit", Icons.Filled.Favorite) { showFavorites = true }
+                                ShopShortcut("Favorit", Icons.Filled.Favorite, pro = !isPro) {
+                                    if (isPro) showFavorites = true else showPaywall = true
+                                }
                                 ShopShortcut("Riwayat", Icons.Filled.DateRange) { showHistory = true }
                             }
                             shop.wallet?.let { WalletBar(it) }
@@ -367,11 +374,23 @@ private fun SubPage(title: String?, onBack: () -> Unit, content: @Composable () 
 }
 
 @Composable
-private fun ShopShortcut(label: String, icon: ImageVector, enabled: Boolean = true, highlight: Boolean = false, onClick: () -> Unit) {
+private fun ShopShortcut(
+    label: String,
+    icon: ImageVector,
+    enabled: Boolean = true,
+    highlight: Boolean = false,
+    pro: Boolean = false,
+    onClick: () -> Unit,
+) {
     AssistChip(
         onClick = onClick,
         enabled = enabled,
-        label = { Text(label) },
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(label)
+                if (pro) ProBadge()
+            }
+        },
         leadingIcon = { Icon(icon, null, modifier = Modifier.size(18.dp)) },
         colors = if (highlight) {
             AssistChipDefaults.assistChipColors(
