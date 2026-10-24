@@ -91,18 +91,28 @@ object AdsManager {
 }
 
 /**
- * Toko harian yang sudah dibuka dengan iklan berlaku sampai rotasi toko berganti. Penandanya
- * disimpan di folder cache, jadi "Hapus cache" di pengaturan Android mengunci toko kembali.
+ * Sesi akses toko harian bagi pengguna gratis: terbuka selama [SESSION_MILLIS] setelah menonton
+ * iklan, dan hanya untuk rotasi toko saat itu. Penandanya disimpan di folder cache, jadi
+ * "Hapus cache" di pengaturan Android juga mengakhiri sesi.
  */
 object StoreUnlock {
+    const val SESSION_MILLIS = 60 * 60 * 1000L
     private const val FILE = "store_unlock"
 
     private fun file(context: Context) = java.io.File(context.cacheDir, FILE)
 
-    fun isUnlocked(context: Context, rotationDate: String): Boolean =
-        runCatching { file(context).readText().trim() == rotationDate }.getOrDefault(false)
+    /** Waktu berakhirnya sesi untuk [rotationDate], atau null bila tidak ada sesi aktif. */
+    fun expiresAt(context: Context, rotationDate: String, now: Long = System.currentTimeMillis()): Long? {
+        val (rotation, expires) = runCatching { file(context).readText().trim().split("|") }.getOrNull()
+            ?.takeIf { it.size == 2 } ?: return null
+        val end = expires.toLongOrNull() ?: return null
+        // Batas atas melindungi dari jam perangkat yang dimundurkan setelah membuka toko.
+        return end.takeIf { rotation == rotationDate && it > now && it - now <= SESSION_MILLIS }
+    }
 
-    fun unlock(context: Context, rotationDate: String) {
-        runCatching { file(context).writeText(rotationDate) }
+    fun isUnlocked(context: Context, rotationDate: String): Boolean = expiresAt(context, rotationDate) != null
+
+    fun unlock(context: Context, rotationDate: String, durationMillis: Long = SESSION_MILLIS) {
+        runCatching { file(context).writeText("$rotationDate|${System.currentTimeMillis() + durationMillis}") }
     }
 }

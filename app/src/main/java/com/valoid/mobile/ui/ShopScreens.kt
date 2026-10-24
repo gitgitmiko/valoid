@@ -252,7 +252,7 @@ fun StoreLockedCard(
             )
             Text("Toko harian terkunci", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
             Text(
-                "Tonton iklan singkat untuk membuka toko harianmu. Toko tetap terbuka sampai berganti besok.",
+                "Tonton iklan singkat untuk membuka toko harianmu selama 1 jam.",
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 6.dp),
@@ -267,6 +267,26 @@ fun StoreLockedCard(
             androidx.compose.material3.TextButton(onClick = onPro, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Tanpa iklan dengan Valoid Pro")
             }
+        }
+    }
+}
+
+/** Sisa waktu sesi toko harian untuk pengguna gratis. */
+@Composable
+fun StoreSessionBanner(endsAtMillis: Long, onPro: () -> Unit) {
+    val left = rememberSecondsLeft(endsAtMillis)
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Akses toko berakhir dalam %02d:%02d".format(left / 60, left % 60),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            androidx.compose.material3.TextButton(onClick = onPro) { Text("Tanpa iklan") }
         }
     }
 }

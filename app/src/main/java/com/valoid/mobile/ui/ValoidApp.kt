@@ -270,10 +270,20 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     val nightAvailable = front?.nightMarket?.isNotEmpty() == true
-    // Pengguna gratis membuka toko harian dengan iklan; berlaku sampai rotasi toko berganti.
+    // Pengguna gratis membuka toko harian dengan iklan untuk satu sesi (1 jam, selama rotasi yang sama).
     val dailyRotation = front?.rotationDate
-    val dailyUnlocked = isPro || dailyRotation == null ||
-        remember(unlockTick, dailyRotation) { StoreUnlock.isUnlocked(context, dailyRotation) }
+    val sessionEndsAt = if (isPro || dailyRotation == null) {
+        null
+    } else {
+        remember(unlockTick, dailyRotation) { StoreUnlock.expiresAt(context, dailyRotation) }
+    }
+    val dailyUnlocked = isPro || dailyRotation == null || sessionEndsAt != null
+    // Kunci lagi tepat saat sesi berakhir, walau aplikasi sedang terbuka.
+    LaunchedEffect(sessionEndsAt) {
+        val end = sessionEndsAt ?: return@LaunchedEffect
+        kotlinx.coroutines.delay((end - System.currentTimeMillis()).coerceAtLeast(0) + 500)
+        unlockTick++
+    }
     Box(Modifier.fillMaxSize()) {
         // Ruang bawah dikosongkan untuk navigasi mengambang.
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = 96.dp)) {
@@ -399,6 +409,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                                 }
                                 ShopShortcut("Riwayat", Icons.Filled.DateRange) { showHistory = true }
                             }
+                            sessionEndsAt?.let { StoreSessionBanner(it, onPro = { showPaywall = true }) }
                             shop.wallet?.let { WalletBar(it) }
                             if (front != null && front.bundles.isNotEmpty()) {
                                 Text("Bundle", style = MaterialTheme.typography.titleLarge)
