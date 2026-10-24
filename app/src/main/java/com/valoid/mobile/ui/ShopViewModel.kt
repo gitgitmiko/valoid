@@ -157,6 +157,12 @@ class ShopViewModel(
 
     fun setRegion(region: RiotRegion) = _state.update { it.copy(region = region) }
 
+    /** Mencoba lagi login otomatis memakai cookie sesi Riot (tombol "Coba lagi"). */
+    fun retryConnect(uid: String) {
+        autoConnectTried = false
+        autoConnect(uid)
+    }
+
     /** Login Riot otomatis sekali per sesi aplikasi bila cookie sesi Riot masih berlaku. */
     fun autoConnect(uid: String) {
         if (autoConnectTried || session != null) return

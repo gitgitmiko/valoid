@@ -258,8 +258,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                 )
                 !shop.connected -> ConnectRiotPrompt(
                     state = shop,
-                    onRegion = shopVm::setRegion,
                     onConnect = { showRiotLogin = true },
+                    onRetry = { shopVm.retryConnect(uid) },
                 )
                 tab == Tab.PROFILE -> ProfileScreen(
                     profile = shop.profile,

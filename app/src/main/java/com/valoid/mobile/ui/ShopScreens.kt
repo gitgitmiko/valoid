@@ -1,5 +1,7 @@
 package com.valoid.mobile.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,34 +34,57 @@ import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.RiotRegion
 import com.valoid.mobile.data.SkinOffer
 
+/** Kartu ajakan menghubungkan akun Riot; region dideteksi otomatis setelah login. */
 @Composable
 fun ConnectRiotPrompt(
     state: ShopUiState,
-    onRegion: (RiotRegion) -> Unit,
     onConnect: () -> Unit,
+    onRetry: () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("Hubungkan akun Riot", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Login dilakukan langsung di halaman resmi Riot. Valoid tidak menyimpan password atau token kamu.",
-            modifier = Modifier.padding(vertical = 12.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RiotRegion.entries.forEach { r ->
-                FilterChip(selected = r == state.region, onClick = { onRegion(r) }, label = { Text(r.name) })
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Surface(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(72.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.material.icons.Icons.Filled.AccountCircle,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
+                Text(
+                    "Hubungkan Riot Games",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 20.dp),
+                )
+                Text(
+                    "Tautkan akunmu untuk melihat toko harian, Night Market, dan statistikmu.",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                state.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+                }
+                Button(
+                    onClick = onConnect,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(52.dp),
+                ) {
+                    Text(if (state.loading) "MENGHUBUNGKAN..." else "HUBUNGKAN SEKARANG", fontWeight = FontWeight.SemiBold)
+                }
+                androidx.compose.material3.TextButton(onClick = onRetry, enabled = !state.loading, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("Coba lagi")
+                }
             }
-        }
-        state.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
-        }
-        Button(onClick = onConnect, enabled = !state.loading, modifier = Modifier.padding(top = 16.dp)) {
-            Text(if (state.loading) "Menghubungkan..." else "Login dengan Riot")
         }
     }
 }
