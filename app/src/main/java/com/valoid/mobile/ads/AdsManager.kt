@@ -90,15 +90,19 @@ object AdsManager {
     }
 }
 
-/** Toko harian yang sudah dibuka dengan iklan berlaku sampai rotasi toko berganti. */
+/**
+ * Toko harian yang sudah dibuka dengan iklan berlaku sampai rotasi toko berganti. Penandanya
+ * disimpan di folder cache, jadi "Hapus cache" di pengaturan Android mengunci toko kembali.
+ */
 object StoreUnlock {
-    private const val PREFS = "store_unlock"
-    private const val KEY_ROTATION = "rotation"
+    private const val FILE = "store_unlock"
+
+    private fun file(context: Context) = java.io.File(context.cacheDir, FILE)
 
     fun isUnlocked(context: Context, rotationDate: String): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ROTATION, null) == rotationDate
+        runCatching { file(context).readText().trim() == rotationDate }.getOrDefault(false)
 
     fun unlock(context: Context, rotationDate: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_ROTATION, rotationDate).apply()
+        runCatching { file(context).writeText(rotationDate) }
     }
 }
