@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="1024" height="1024">
+  <!-- Latar -->
+  <rect width="108" height="108" fill="#16141C"/>
+  <circle cx="54" cy="54" r="40" fill="#241F33"/>
+  <!-- Logo -->
+  <path d="M69.500,27.153 A31.0,31.0 0 0,1 69.500,80.847" fill="none" stroke="#FFD23F" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M38.500,80.847 A31.0,31.0 0 0,1 38.500,27.153" fill="none" stroke="#FFD23F" stroke-width="3.2" stroke-linecap="round"/>
+  <polygon points="36,36 45,36 54,61 63,36 72,36 58,76 50,76" fill="#FFD23F"/>
+  <polygon points="54,31.5 60.5,38 54,44.5 47.5,38" fill="#A78BFA"/>
+</svg>
