@@ -56,7 +56,13 @@ fun AuthScreen(vm: AuthViewModel) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("VALOID", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+        ValoidLogo(96.dp)
+        Text(
+            "VALOID",
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 12.dp),
+        )
         Text(
             when (mode) {
                 AuthMode.LOGIN -> "Masuk ke akunmu"

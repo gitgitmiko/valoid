@@ -119,12 +119,7 @@ fun AboutScreen(onBack: () -> Unit) {
         LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(96.dp).padding(4.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("V", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, style = MaterialTheme.typography.displayLarge)
-                    }
+                    ValoidLogo(112.dp)
                     Text("VALOID", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                     Text("Versi $version", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }

@@ -14,8 +14,8 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 35
-        versionCode = 27
-        versionName = "0.14.0"
+        versionCode = 28
+        versionName = "0.15.0"
     }
 
     buildTypes {
