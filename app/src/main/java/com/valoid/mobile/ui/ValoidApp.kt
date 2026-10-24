@@ -54,6 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.valoid.mobile.BuildConfig
+import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
 
@@ -78,6 +80,9 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var showFaq by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showNight by rememberSaveable { mutableStateOf(false) }
+    var showPaywall by rememberSaveable { mutableStateOf(false) }
+    val isPro by ProManager.isPro.collectAsStateWithLifecycle()
+    var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var showFavorites by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var showMatches by rememberSaveable { mutableStateOf(false) }
@@ -129,6 +134,10 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         if (inStore != null) shopVm.openDetail(inStore.first, inStore.second) else shopVm.openDetail(SkinOffer(id, name, iconUrl, 0), 0)
     }
 
+    if (showPaywall) {
+        PaywallScreen(onClose = { showPaywall = false })
+        return
+    }
     if (showFaq) {
         FaqScreen(onBack = { showFaq = false })
         return
@@ -284,6 +293,13 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     },
                     onOpenFaq = { showFaq = true },
                     onOpenAbout = { showAbout = true },
+                    isPro = isPro,
+                    onOpenPaywall = { showPaywall = true },
+                    debugPro = if (BuildConfig.DEBUG) debugPro else null,
+                    onDebugPro = {
+                        ProManager.setDebugOverride(it)
+                        debugPro = it
+                    },
                 )
                 !shop.connected -> ConnectRiotPrompt(
                     state = shop,

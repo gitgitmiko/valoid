@@ -77,6 +77,10 @@ fun SettingsTab(
     onSignOut: () -> Unit,
     onOpenFaq: () -> Unit,
     onOpenAbout: () -> Unit,
+    isPro: Boolean = false,
+    onOpenPaywall: () -> Unit = {},
+    debugPro: Boolean? = null,
+    onDebugPro: (Boolean) -> Unit = {},
 ) {
     var confirmDisconnect by remember { mutableStateOf(false) }
 
@@ -91,6 +95,21 @@ fun SettingsTab(
             Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SettingsCard("Valoid Pro") {
+                Text(if (isPro) "Aktif. Terima kasih sudah mendukung Valoid!" else "Toko tanpa iklan, skin favorit dan notifikasinya, serta banyak akun Riot.")
+                if (isPro) {
+                    OutlinedButton(onClick = onOpenPaywall) { Text("Detail langganan") }
+                } else {
+                    Button(onClick = onOpenPaywall) { Text("Lihat Valoid Pro") }
+                }
+                debugPro?.let { on ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Mode Pro (uji, hanya build debug)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Switch(checked = on, onCheckedChange = onDebugPro)
+                    }
+                }
+            }
+
             SettingsCard("Akun Valoid") {
                 Text(email ?: "-")
                 OutlinedButton(onClick = onSignOut) { Text("Keluar dari Valoid") }

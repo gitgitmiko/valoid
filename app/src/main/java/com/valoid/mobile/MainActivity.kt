@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
+import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.notify.StoreCheckWorker
 import com.valoid.mobile.security.AppLock
 import com.valoid.mobile.ui.LockScreen
@@ -30,6 +31,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StoreCheckWorker.schedule(this)
+        ProManager.init(this)
         locked = AppLock.isEnabled(this)
         setContent {
             ValoidTheme {
@@ -54,6 +56,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        ProManager.refresh()
         val away = SystemClock.elapsedRealtime() - backgroundedAt
         if (AppLock.isEnabled(this) && !authenticating && backgroundedAt > 0 && away > AppLock.RELOCK_AFTER_MILLIS) {
             locked = true
