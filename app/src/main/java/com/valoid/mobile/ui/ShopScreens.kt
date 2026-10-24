@@ -2,6 +2,7 @@ package com.valoid.mobile.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -103,6 +104,7 @@ fun OfferListScreen(
     footer: @Composable () -> Unit = {},
     favoriteIds: Set<String> = emptySet(),
     onToggleFavorite: (SkinOffer) -> Unit = {},
+    locked: (@Composable () -> Unit)? = null,
 ) {
     val secondsLeft = rememberSecondsLeft(endsAtMillis)
     // Muat ulang otomatis begitu toko berganti.
@@ -132,6 +134,7 @@ fun OfferListScreen(
         }
         error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         when {
+            locked != null -> item { locked() }
             loading && offers.isEmpty() -> item {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
@@ -220,6 +223,49 @@ fun HistoryScreen(days: List<HistoryDay>, loading: Boolean, error: String?, onRe
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Kartu pengganti toko harian bagi pengguna gratis sebelum menonton iklan. */
+@Composable
+fun StoreLockedCard(
+    watching: Boolean,
+    error: String?,
+    allowSkip: Boolean,
+    onWatch: () -> Unit,
+    onSkip: () -> Unit,
+    onPro: () -> Unit,
+) {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.Filled.Lock,
+                null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(44.dp),
+            )
+            Text("Toko harian terkunci", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+            Text(
+                "Tonton iklan singkat untuk membuka toko harianmu. Toko tetap terbuka sampai berganti besok.",
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp)) }
+            Button(onClick = onWatch, enabled = !watching, modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(52.dp)) {
+                Text(if (watching) "Memuat iklan..." else "Tonton iklan", fontWeight = FontWeight.SemiBold)
+            }
+            if (allowSkip) {
+                OutlinedButton(onClick = onSkip, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Iklan tidak tersedia, buka toko") }
+            }
+            androidx.compose.material3.TextButton(onClick = onPro, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Tanpa iklan dengan Valoid Pro")
             }
         }
     }

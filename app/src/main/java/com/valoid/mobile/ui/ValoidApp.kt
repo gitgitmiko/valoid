@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.BuildConfig
+import com.valoid.mobile.ads.AdsManager
+import com.valoid.mobile.ads.StoreUnlock
 import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
@@ -83,6 +85,10 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var showPaywall by rememberSaveable { mutableStateOf(false) }
     val isPro by ProManager.isPro.collectAsStateWithLifecycle()
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
+    var adWatching by remember { mutableStateOf(false) }
+    var adError by remember { mutableStateOf<String?>(null) }
+    var adFailures by remember { mutableStateOf(0) }
+    var unlockTick by remember { mutableStateOf(0) }
     var showFavorites by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var showMatches by rememberSaveable { mutableStateOf(false) }
@@ -262,6 +268,10 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     val nightAvailable = front?.nightMarket?.isNotEmpty() == true
+    // Pengguna gratis membuka toko harian dengan iklan; berlaku sampai rotasi toko berganti.
+    val dailyRotation = front?.rotationDate
+    val dailyUnlocked = isPro || dailyRotation == null ||
+        remember(unlockTick, dailyRotation) { StoreUnlock.isUnlocked(context, dailyRotation) }
     Box(Modifier.fillMaxSize()) {
         // Ruang bawah dikosongkan untuk navigasi mengambang.
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = 96.dp)) {
@@ -332,6 +342,44 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     onOfferClick = { shopVm.openDetail(it, front?.dailyEndsAtMillis ?: 0) },
                     favoriteIds = favoriteIds,
                     onToggleFavorite = { toggleFavorite(it.id, it.name, it.iconUrl) },
+                    locked = if (dailyUnlocked || dailyRotation == null) {
+                        null
+                    } else {
+                        {
+                            val rotation = dailyRotation
+                            run {
+                                StoreLockedCard(
+                                    watching = adWatching,
+                                    error = adError,
+                                    allowSkip = adFailures >= 2,
+                                    onWatch = {
+                                        val activity = context as? android.app.Activity ?: return@StoreLockedCard
+                                        adWatching = true
+                                        adError = null
+                                        AdsManager.showRewarded(
+                                            activity,
+                                            onRewarded = {
+                                                adWatching = false
+                                                adFailures = 0
+                                                StoreUnlock.unlock(context, rotation)
+                                                unlockTick++
+                                            },
+                                            onFailed = {
+                                                adWatching = false
+                                                adFailures++
+                                                adError = it
+                                            },
+                                        )
+                                    },
+                                    onSkip = {
+                                        StoreUnlock.unlock(context, rotation)
+                                        unlockTick++
+                                    },
+                                    onPro = { showPaywall = true },
+                                )
+                            }
+                        }
+                    },
                     header = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

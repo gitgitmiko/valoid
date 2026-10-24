@@ -15,6 +15,11 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = 28
+        // ID AdMob: isi admobAppId/admobRewardedId di gradle.properties. Bawaannya ID uji resmi Google.
+        val admobAppId = (project.findProperty("admobAppId") as String?) ?: "ca-app-pub-3940256099942544~3347511713"
+        val admobRewardedId = (project.findProperty("admobRewardedId") as String?) ?: "ca-app-pub-3940256099942544/5224354917"
+        manifestPlaceholders["admobAppId"] = admobAppId
+        buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
         versionName = "0.15.0"
     }
 
@@ -55,6 +60,8 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("com.google.android.ump:user-messaging-platform:3.1.0")
 
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")

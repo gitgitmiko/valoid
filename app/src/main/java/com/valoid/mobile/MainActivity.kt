@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
+import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.notify.StoreCheckWorker
 import com.valoid.mobile.security.AppLock
@@ -32,6 +33,7 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         StoreCheckWorker.schedule(this)
         ProManager.init(this)
+        AdsManager.initialize(this)
         locked = AppLock.isEnabled(this)
         setContent {
             ValoidTheme {
