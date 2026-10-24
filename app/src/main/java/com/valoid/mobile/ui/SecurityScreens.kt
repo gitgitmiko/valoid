@@ -1,6 +1,10 @@
 package com.valoid.mobile.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import com.valoid.mobile.data.RiotAccount
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -81,8 +85,12 @@ fun SettingsTab(
     onOpenPaywall: () -> Unit = {},
     debugPro: Boolean? = null,
     onDebugPro: (Boolean) -> Unit = {},
+    accounts: List<RiotAccount> = emptyList(),
+    activeAccountId: String? = null,
+    onSwitchAccount: (String) -> Unit = {},
+    onRemoveAccount: (String) -> Unit = {},
 ) {
-    var confirmDisconnect by remember { mutableStateOf(false) }
+    var confirmRemove by remember { mutableStateOf<RiotAccount?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         Text(
@@ -116,17 +124,51 @@ fun SettingsTab(
             }
 
             SettingsCard("Akun Riot") {
-                Text(
-                    if (riotConnected) "Terhubung. Cookie sesi Riot tersimpan di HP ini untuk login otomatis dan notifikasi."
-                    else "Tidak terhubung.",
-                )
-                if (riotConnected) {
-                    OutlinedButton(onClick = { confirmDisconnect = true }) { Text("Putuskan akun Riot") }
-                } else {
-                    Button(onClick = onConnectRiot, enabled = !riotConnecting) {
-                        Text(if (riotConnecting) "Menghubungkan..." else "Hubungkan akun Riot")
+                if (accounts.isEmpty()) Text("Belum ada akun Riot yang terhubung.")
+                accounts.forEach { account ->
+                    val active = account.puuid == activeAccountId
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.background)
+                            .clickable(enabled = !active) { onSwitchAccount(account.puuid) }
+                            .padding(start = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                            Text(account.label, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                when {
+                                    active && riotConnected -> "Aktif"
+                                    active && riotConnecting -> "Menghubungkan..."
+                                    active -> "Aktif, belum tersambung"
+                                    else -> "Ketuk untuk beralih"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
+                        IconButton(onClick = { confirmRemove = account }) { Icon(Icons.Filled.Delete, "Lepas akun") }
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (accounts.isEmpty()) {
+                        Button(onClick = onConnectRiot, enabled = !riotConnecting) {
+                            Text(if (riotConnecting) "Menghubungkan..." else "Hubungkan akun Riot")
+                        }
+                    } else {
+                        OutlinedButton(onClick = onConnectRiot, enabled = !riotConnecting) { Text("Tambah akun Riot") }
+                        if (!isPro) {
+                            Box(Modifier.padding(start = 8.dp)) { ProBadge() }
+                        }
+                    }
+                }
+                Text(
+                    "Sesi tiap akun disimpan terenkripsi di HP ini untuk login otomatis dan notifikasi.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
             }
 
             SettingsCard("Kunci aplikasi") {
@@ -153,20 +195,18 @@ fun SettingsTab(
         }
     }
 
-    if (confirmDisconnect) {
+    confirmRemove?.let { account ->
         AlertDialog(
-            onDismissRequest = { confirmDisconnect = false },
-            title = { Text("Putuskan akun Riot?") },
-            text = {
-                Text("Cookie login Riot dihapus dari HP ini. Login otomatis dan notifikasi favorit berhenti sampai kamu login Riot lagi.")
-            },
+            onDismissRequest = { confirmRemove = null },
+            title = { Text("Lepas ${account.label}?") },
+            text = { Text("Sesi Riot akun ini dihapus dari HP. Login otomatis dan notifikasi untuk akun ini berhenti sampai kamu menghubungkannya lagi.") },
             confirmButton = {
                 TextButton(onClick = {
-                    confirmDisconnect = false
-                    onDisconnectRiot()
-                }) { Text("Putuskan") }
+                    confirmRemove = null
+                    onRemoveAccount(account.puuid)
+                }) { Text("Lepas") }
             },
-            dismissButton = { TextButton(onClick = { confirmDisconnect = false }) { Text("Batal") } },
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Batal") } },
         )
     }
 }

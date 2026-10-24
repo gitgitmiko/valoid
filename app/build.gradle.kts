@@ -62,6 +62,7 @@ dependencies {
     implementation("com.android.billingclient:billing-ktx:7.1.1")
     implementation("com.google.android.gms:play-services-ads:23.6.0")
     implementation("com.google.android.ump:user-messaging-platform:3.1.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")

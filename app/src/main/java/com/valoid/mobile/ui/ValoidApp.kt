@@ -84,6 +84,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var showNight by rememberSaveable { mutableStateOf(false) }
     var showPaywall by rememberSaveable { mutableStateOf(false) }
     val isPro by ProManager.isPro.collectAsStateWithLifecycle()
+    val riotAccounts by shopVm.accounts.collectAsStateWithLifecycle()
+    val activeAccountId by shopVm.activeAccountId.collectAsStateWithLifecycle()
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
@@ -297,10 +299,18 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                             onFailure = { settingsMessage = it },
                         )
                     },
-                    onConnectRiot = { showRiotLogin = true },
+                    // Pengguna gratis hanya dapat menautkan satu akun Riot.
+                    onConnectRiot = { if (riotAccounts.isEmpty() || isPro) showRiotLogin = true else showPaywall = true },
                     onDisconnectRiot = {
-                        shopVm.disconnectRiot()
-                        settingsMessage = "Akun Riot diputuskan dan cookie login dihapus."
+                        shopVm.disconnectRiot(uid)
+                        settingsMessage = "Akun Riot diputuskan dan sesinya dihapus."
+                    },
+                    accounts = riotAccounts,
+                    activeAccountId = activeAccountId,
+                    onSwitchAccount = { shopVm.switchAccount(it, uid) },
+                    onRemoveAccount = {
+                        shopVm.removeAccount(it, uid)
+                        settingsMessage = "Akun Riot dilepas dan sesinya dihapus."
                     },
                     onSignOut = {
                         shopVm.onSignOut()

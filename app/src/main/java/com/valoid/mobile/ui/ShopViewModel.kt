@@ -11,6 +11,8 @@ import com.valoid.mobile.data.HistoryDay
 import com.valoid.mobile.data.Match
 import com.valoid.mobile.data.PlayerCollection
 import com.valoid.mobile.data.PlayerProfile
+import com.valoid.mobile.data.RiotAccount
+import com.valoid.mobile.data.RiotAccounts
 import com.valoid.mobile.data.RiotAuth
 import com.valoid.mobile.data.HistoryRepository
 import com.valoid.mobile.data.RiotException
@@ -155,42 +157,94 @@ class ShopViewModel(
 
     private var autoConnectTried = false
 
+    val accounts: StateFlow<List<RiotAccount>> = RiotAccounts.accounts
+    val activeAccountId: StateFlow<String?> = RiotAccounts.activeId
+
     fun setRegion(region: RiotRegion) = _state.update { it.copy(region = region) }
 
-    /** Mencoba lagi login otomatis memakai cookie sesi Riot (tombol "Coba lagi"). */
+    /** Mencoba lagi login otomatis memakai sesi akun aktif (tombol "Coba lagi"). */
     fun retryConnect(uid: String) {
         autoConnectTried = false
         autoConnect(uid)
     }
 
-    /** Login Riot otomatis sekali per sesi aplikasi bila cookie sesi Riot masih berlaku. */
+    /**
+     * Login Riot otomatis sekali per sesi aplikasi memakai cookie akun aktif. Cookie lama yang masih
+     * tersimpan di WebView (versi sebelum banyak akun) dipindahkan ke daftar akun terenkripsi.
+     */
     fun autoConnect(uid: String) {
         if (autoConnectTried || session != null) return
         autoConnectTried = true
+        val account = RiotAccounts.active()
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            val tokens = runCatching { riot.reauthenticate() }.getOrNull()
-            if (tokens != null) {
-                onRiotToken(tokens.accessToken, tokens.idToken, uid)
+            val cookies = account?.cookies ?: riot.legacyWebViewCookies()
+            val reauth = cookies?.let { runCatching { riot.reauthenticate(it) }.getOrNull() }
+            if (reauth != null) {
+                connect(reauth.tokens, reauth.cookies, uid)
+                if (account == null) RiotAuth.clear()
             } else {
-                _state.update { it.copy(loading = false) }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = if (account != null) "Sesi ${account.label} sudah berakhir. Hubungkan ulang akun ini." else null,
+                    )
+                }
             }
         }
     }
 
+    /** Dipanggil setelah login di halaman Riot: simpan cookie sesi akun ini lalu hubungkan. */
     fun onRiotToken(accessToken: String, idToken: String?, uid: String) {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            try {
-                val created = riot.createSession(accessToken, idToken, _state.value.region)
-                session = created
-                _state.update { it.copy(connected = true, region = created.region) }
-                loadProfile()
-                refresh(uid)
-            } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: "Gagal terhubung ke Riot") }
-            }
+            val cookies = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { RiotAuth.takeWebViewCookies() }
+            connect(RiotAuth.Tokens(accessToken, idToken), cookies, uid)
         }
+    }
+
+    private suspend fun connect(tokens: RiotAuth.Tokens, cookies: String?, uid: String) {
+        try {
+            val created = riot.createSession(tokens.accessToken, tokens.idToken, _state.value.region)
+            if (cookies != null) RiotAccounts.upsert(RiotAccount(puuid = created.puuid, cookies = cookies))
+            if (RiotAccounts.activeId.value != created.puuid) resetAccountState()
+            RiotAccounts.setActive(created.puuid)
+            session = created
+            _state.update { it.copy(connected = true, region = created.region) }
+            loadProfile()
+            refresh(uid)
+            riot.riotId(created)?.let { (name, tag) -> RiotAccounts.update(created.puuid) { it.copy(name = name, tag = tag) } }
+        } catch (e: Exception) {
+            _state.update { it.copy(loading = false, error = e.message ?: "Gagal terhubung ke Riot") }
+        }
+    }
+
+    /** Pindah ke akun Riot lain yang sudah ditautkan. */
+    fun switchAccount(puuid: String, uid: String) {
+        if (puuid == RiotAccounts.activeId.value && session != null) return
+        RiotAccounts.setActive(puuid)
+        session = null
+        resetAccountState()
+        retryConnect(uid)
+    }
+
+    /** Melepas akun Riot dari perangkat; bila itu akun aktif, pindah ke akun lain bila ada. */
+    fun removeAccount(puuid: String, uid: String) {
+        val wasActive = puuid == RiotAccounts.activeId.value
+        RiotAccounts.remove(puuid)
+        if (!wasActive) return
+        session = null
+        resetAccountState()
+        if (RiotAccounts.active() != null) retryConnect(uid) else autoConnectTried = true
+    }
+
+    /** Data toko, profil, dan statistik milik akun sebelumnya dibuang saat berganti akun. */
+    private fun resetAccountState() {
+        fullHistory = emptyList()
+        _openMatch.value = null
+        _detail.value = null
+        _bundle.value = null
+        _state.update { ShopUiState(region = it.region) }
     }
 
     fun refresh(uid: String) {
@@ -202,14 +256,15 @@ class ShopViewModel(
                 _state.update { it.copy(loading = false, storefront = front) }
                 // Saldo tidak wajib: kegagalan dompet tidak menggagalkan toko.
                 runCatching { riot.loadWallet(s) }.onSuccess { w -> _state.update { it.copy(wallet = w) } }
-                runCatching { history.saveDay(uid, front.rotationDate, front.daily) }
-                fullHistory = runCatching { history.loadHistory(uid, limit = 400) }.getOrDefault(fullHistory)
+                runCatching { history.saveDay(uid, s.puuid, front.rotationDate, front.daily) }
+                fullHistory = runCatching { history.loadHistory(uid, s.puuid, includeLegacy(s.puuid), limit = 400) }
+                    .getOrDefault(fullHistory)
             } catch (e: RiotException) {
                 if (e.sessionExpired) {
                     session = null
-                    val tokens = runCatching { riot.reauthenticate() }.getOrNull()
-                    if (tokens != null) {
-                        onRiotToken(tokens.accessToken, tokens.idToken, uid)
+                    val reauth = RiotAccounts.active()?.let { runCatching { riot.reauthenticate(it.cookies) }.getOrNull() }
+                    if (reauth != null) {
+                        connect(reauth.tokens, reauth.cookies, uid)
                         return@launch
                     }
                 }
@@ -221,6 +276,8 @@ class ShopViewModel(
             }
         }
     }
+
+    private fun includeLegacy(puuid: String) = RiotAccounts.oldest()?.puuid == puuid
 
     /** Riwayat lengkap untuk statistik pribadi; dimuat setelah toko tercatat. */
     private var fullHistory: List<HistoryDay> = emptyList()
@@ -319,10 +376,11 @@ class ShopViewModel(
     }
 
     fun loadHistory(uid: String) {
+        val puuid = session?.puuid ?: RiotAccounts.activeId.value ?: return
         _state.update { it.copy(historyLoading = true, historyError = null) }
         viewModelScope.launch {
             try {
-                val days = history.loadHistory(uid)
+                val days = history.loadHistory(uid, puuid, includeLegacy(puuid))
                 _state.update { it.copy(historyLoading = false, history = days) }
             } catch (e: Exception) {
                 _state.update { it.copy(historyLoading = false, historyError = e.message ?: "Gagal memuat riwayat") }
@@ -330,21 +388,21 @@ class ShopViewModel(
         }
     }
 
-    /** Menghapus sesi dan cookie Riot dari perangkat tanpa keluar dari akun Valoid. */
-    fun disconnectRiot() {
-        session = null
-        autoConnectTried = true
+    /** Melepas akun Riot yang aktif dari perangkat tanpa keluar dari akun Valoid. */
+    fun disconnectRiot(uid: String) {
+        RiotAccounts.activeId.value?.let { removeAccount(it, uid) }
         RiotAuth.clear()
-        _state.update { ShopUiState(region = it.region, history = it.history) }
     }
 
-    /** Dipanggil saat keluar dari akun Valoid: hapus sesi Riot dan data milik pengguna sebelumnya. */
+    /** Dipanggil saat keluar dari akun Valoid: hapus semua akun Riot dan data pengguna sebelumnya. */
     fun onSignOut() {
-        disconnectRiot()
+        RiotAccounts.clear()
+        RiotAuth.clear()
+        session = null
         autoConnectTried = false
         favoritesJob?.cancel()
         favoritesJob = null
         _favorites.value = emptyList()
-        _state.update { ShopUiState(region = it.region) }
+        resetAccountState()
     }
 }

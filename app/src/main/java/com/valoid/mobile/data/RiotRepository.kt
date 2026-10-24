@@ -36,21 +36,30 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
 
     private val noRedirects = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
 
+    class Reauth(val tokens: RiotAuth.Tokens, val cookies: String)
+
     /**
-     * Meminta token baru memakai cookie sesi Riot yang tersimpan. Mengembalikan null bila cookie
-     * tidak ada atau sudah tidak berlaku (Riot mengarahkan ke halaman login).
+     * Meminta token baru memakai cookie sesi Riot [cookies]. Mengembalikan token beserta cookie yang
+     * sudah diperbarui, atau null bila sesi tidak berlaku lagi (Riot mengarahkan ke halaman login).
      */
-    suspend fun reauthenticate(): RiotAuth.Tokens? {
-        // CookieManager diakses di main thread agar aman juga saat dipanggil dari worker latar.
-        val cookies = withContext(Dispatchers.Main) { RiotAuth.cookieHeader() }
-            ?.takeIf { it.contains("ssid=") } ?: return null
+    suspend fun reauthenticate(cookies: String): Reauth? {
+        if (!cookies.contains("ssid=")) return null
         val (setCookies, location) = withContext(Dispatchers.IO) {
             noRedirects.newCall(
                 Request.Builder().url(RiotAuth.AUTH_URL).header("Cookie", cookies).build(),
             ).execute().use { it.headers("Set-Cookie") to it.header("Location") }
         }
-        withContext(Dispatchers.Main) { RiotAuth.storeCookies(setCookies) }
-        return RiotAuth.parseRedirect(location)
+        val tokens = RiotAuth.parseRedirect(location) ?: return null
+        return Reauth(tokens, RiotAuth.mergeCookies(cookies, setCookies))
+    }
+
+    /** Cookie sesi lama yang masih tersimpan di WebView (Valoid sebelum dukungan banyak akun). */
+    suspend fun legacyWebViewCookies(): String? =
+        withContext(Dispatchers.Main) { RiotAuth.cookieHeader() }?.takeIf { it.contains("ssid=") }
+
+    /** Riot ID (nama, tag) pemilik sesi. */
+    suspend fun riotId(session: RiotSession): Pair<String, String?>? = withContext(Dispatchers.IO) {
+        runCatching { playerNames(session, listOf(session.puuid))[session.puuid.lowercase()] }.getOrNull()
     }
 
     private data class SkinInfo(val name: String, val iconUrl: String?)
@@ -251,7 +260,7 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         // Dibatasi beberapa sekaligus agar tidak terkena rate limit Riot.
         val gate = kotlinx.coroutines.sync.Semaphore(4)
         val raw = coroutineScope {
-            history.filterNot { matchCache.containsKey(it) }.map { id ->
+            history.filterNot { matchCache.containsKey("${session.puuid}:$it") }.map { id ->
                 async {
                     gate.withPermit {
                         runCatching { id to get(pd(session, "match-details/v1/matches/$id").build()).jsonObject }.getOrNull()
@@ -269,11 +278,11 @@ class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
         val names = runCatching { playerNames(session, unnamed) }.getOrDefault(emptyMap())
 
         history.mapNotNull { id ->
-            matchCache[id] ?: raw[id]?.let { json ->
+            matchCache["${session.puuid}:$id"] ?: raw[id]?.let { json ->
                 runCatching { parseMatch(json, session.puuid, rrByMatch[id], names) }.getOrNull()
             }?.also {
                 // Jangan simpan hasil yang data map-nya gagal dimuat dari valorant-api.
-                if (it.mapImage != null) matchCache[id] = it
+                if (it.mapImage != null) matchCache["${session.puuid}:$id"] = it
             }
         }
     }

@@ -29,6 +29,28 @@ object RiotAuth {
 
     fun cookieHeader(): String? = CookieManager.getInstance().getCookie(AUTH_ORIGIN)
 
+    /** Mengambil cookie sesi Riot dari WebView setelah login lalu mengosongkan WebView. Harus di main thread. */
+    fun takeWebViewCookies(): String? {
+        val header = cookieHeader()?.takeIf { it.contains("ssid=") }
+        clear()
+        return header
+    }
+
+    /** Menggabungkan header Set-Cookie ke header Cookie yang tersimpan; cookie yang kedaluwarsa dihapus. */
+    fun mergeCookies(header: String, setCookies: List<String>): String {
+        val jar = LinkedHashMap<String, String>()
+        header.split(";").map { it.trim() }.filter { "=" in it }.forEach { jar[it.substringBefore("=")] = it.substringAfter("=") }
+        setCookies.forEach { raw ->
+            val pair = raw.substringBefore(";").trim()
+            if ("=" !in pair) return@forEach
+            val name = pair.substringBefore("=")
+            val value = pair.substringAfter("=")
+            val expired = raw.contains("Max-Age=0", ignoreCase = true) || raw.contains("expires=Thu, 01 Jan 1970", ignoreCase = true)
+            if (value.isEmpty() || expired) jar.remove(name) else jar[name] = value
+        }
+        return jar.entries.joinToString("; ") { "${it.key}=${it.value}" }
+    }
+
     fun storeCookies(setCookieHeaders: List<String>) {
         val cookies = CookieManager.getInstance()
         setCookieHeaders.forEach { cookies.setCookie(AUTH_ORIGIN, it) }

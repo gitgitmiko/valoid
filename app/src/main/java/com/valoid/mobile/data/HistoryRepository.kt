@@ -6,20 +6,23 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
 /**
- * Menyimpan hasil toko harian ke Firestore: users/{uid}/shopHistory/{tanggal rotasi, yyyy-MM-dd UTC}.
+ * Menyimpan hasil toko harian ke Firestore: users/{uid}/accounts/{puuid}/shopHistory/{tanggal rotasi, yyyy-MM-dd UTC}.
  * Token Riot tidak pernah disimpan di sini, hanya daftar skin yang tampil.
  */
 class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
 
-    private fun collection(uid: String) =
+    private fun legacy(uid: String) =
         db.collection("users").document(uid).collection("shopHistory")
+
+    private fun collection(uid: String, puuid: String) =
+        db.collection("users").document(uid).collection("accounts").document(puuid.lowercase()).collection("shopHistory")
 
     /**
      * Mencatat toko harian untuk rotasi [date] sekali saja; riwayat tidak bisa diubah setelah dibuat.
      * Mengembalikan true bila rotasi baru tercatat.
      */
-    suspend fun saveDay(uid: String, date: String, offers: List<SkinOffer>): Boolean {
-        val dayRef = collection(uid).document(date)
+    suspend fun saveDay(uid: String, puuid: String, date: String, offers: List<SkinOffer>): Boolean {
+        val dayRef = collection(uid, puuid).document(date)
         return db.runTransaction { tx ->
             if (tx.get(dayRef).exists()) return@runTransaction false
             tx.set(
@@ -36,8 +39,15 @@ class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
         }.await()
     }
 
-    suspend fun loadHistory(uid: String, limit: Long = 60): List<HistoryDay> {
-        val snapshot = collection(uid)
+    /** Riwayat akun [puuid]; [includeLegacy] menambahkan riwayat versi lama (sebelum dukungan banyak akun). */
+    suspend fun loadHistory(uid: String, puuid: String, includeLegacy: Boolean, limit: Long = 60): List<HistoryDay> {
+        val current = read(collection(uid, puuid), limit)
+        val old = if (includeLegacy) runCatching { read(legacy(uid), limit) }.getOrDefault(emptyList()) else emptyList()
+        return (current + old).distinctBy { it.date }.sortedByDescending { it.date }.take(limit.toInt())
+    }
+
+    private suspend fun read(ref: com.google.firebase.firestore.CollectionReference, limit: Long): List<HistoryDay> {
+        val snapshot = ref
             .orderBy("date", Query.Direction.DESCENDING)
             .limit(limit)
             .get()

@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryRepository
+import com.valoid.mobile.data.RiotAccounts
 import com.valoid.mobile.data.RiotException
 import com.valoid.mobile.data.RiotRegion
 import com.valoid.mobile.data.RiotRepository
@@ -25,12 +26,15 @@ class StoreCheckWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
     override suspend fun doWork(): Result {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.success()
+        RiotAccounts.init(applicationContext)
+        val account = RiotAccounts.active() ?: return Result.success()
         val riot = RiotRepository()
-        val tokens = runCatching { riot.reauthenticate() }.getOrNull() ?: return Result.success()
+        val reauth = runCatching { riot.reauthenticate(account.cookies) }.getOrNull() ?: return Result.success()
+        RiotAccounts.update(account.puuid) { it.copy(cookies = reauth.cookies) }
         return try {
-            val session = riot.createSession(tokens.accessToken, tokens.idToken, RiotRegion.AP)
+            val session = riot.createSession(reauth.tokens.accessToken, reauth.tokens.idToken, RiotRegion.AP)
             val front = riot.loadStorefront(session)
-            runCatching { HistoryRepository().saveDay(uid, front.rotationDate, front.daily) }
+            runCatching { HistoryRepository().saveDay(uid, session.puuid, front.rotationDate, front.daily) }
 
             // Notifikasi skin favorit hanya untuk pengguna Valoid Pro.
             if (!ProManager.isProCached(applicationContext)) return Result.success()

@@ -10,13 +10,23 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
-    // Riwayat hanya bisa dibuat sekali per rotasi; tidak bisa diubah atau dihapus.
-    match /users/{uid}/shopHistory/{date} {
-      allow read: if signedIn() && request.auth.uid == uid;
-      allow create: if signedIn() && request.auth.uid == uid
+    function validHistory(uid, date) {
+      return signedIn() && request.auth.uid == uid
         && request.resource.data.date == date
         && request.resource.data.offers is list
         && request.resource.data.offers.size() <= 8;
+    }
+
+    // Riwayat per akun Riot; hanya bisa dibuat sekali per rotasi, tidak bisa diubah atau dihapus.
+    match /users/{uid}/accounts/{puuid}/shopHistory/{date} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if validHistory(uid, date);
+    }
+
+    // Riwayat versi lama (sebelum banyak akun); masih ditulis oleh aplikasi versi lama.
+    match /users/{uid}/shopHistory/{date} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if validHistory(uid, date);
     }
   }
 }

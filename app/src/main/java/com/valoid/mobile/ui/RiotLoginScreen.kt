@@ -177,7 +177,12 @@ fun RiotLoginScreen(
                             if (request.isForMainFrame) error = "Gagal memuat halaman login: ${err.description}"
                         }
                     }
-                    loadUrl(RiotAuth.AUTH_URL)
+                    // Cookie tiap akun disimpan di RiotAccounts; mulai login dari WebView kosong agar
+                    // akun baru tidak otomatis masuk sebagai akun yang terakhir dipakai.
+                    cookies.removeAllCookies {
+                        cookies.flush()
+                        loadUrl(RiotAuth.AUTH_URL)
+                    }
                 }
             },
         )
