@@ -26,14 +26,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.Surface
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Person
@@ -402,13 +405,13 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     },
                     header = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ShopShortcut("Night Market", Icons.Filled.Star, enabled = nightAvailable, highlight = nightAvailable) { showNight = true }
-                                ShopShortcut("Favorit", Icons.Filled.Favorite, pro = !isPro) {
-                                    if (isPro) showFavorites = true else showPaywall = true
-                                }
-                                ShopShortcut("Riwayat", Icons.Filled.DateRange) { showHistory = true }
-                            }
+                            StoreShortcuts(
+                                nightAvailable = nightAvailable,
+                                isPro = isPro,
+                                onNight = { showNight = true },
+                                onFavorites = { if (isPro) showFavorites = true else showPaywall = true },
+                                onHistory = { showHistory = true },
+                            )
                             sessionEndsAt?.let { StoreSessionBanner(it, onPro = { showPaywall = true }) }
                             shop.wallet?.let { WalletBar(it) }
                             if (front != null && front.bundles.isNotEmpty()) {
@@ -443,34 +446,57 @@ private fun SubPage(title: String?, onBack: () -> Unit, content: @Composable () 
 }
 
 @Composable
-private fun ShopShortcut(
+fun StoreShortcuts(nightAvailable: Boolean, isPro: Boolean, onNight: () -> Unit, onFavorites: () -> Unit, onHistory: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ShortcutTile("Night Market", Icons.Filled.Star, Modifier.weight(1f), enabled = nightAvailable, highlight = nightAvailable, onClick = onNight)
+        ShortcutTile("Favorit", Icons.Filled.Favorite, Modifier.weight(1f), pro = !isPro, onClick = onFavorites)
+        ShortcutTile("Riwayat", Icons.Filled.DateRange, Modifier.weight(1f), onClick = onHistory)
+    }
+}
+
+@Composable
+private fun ShortcutTile(
     label: String,
     icon: ImageVector,
+    modifier: Modifier,
     enabled: Boolean = true,
     highlight: Boolean = false,
     pro: Boolean = false,
     onClick: () -> Unit,
 ) {
-    AssistChip(
+    val content = when {
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        highlight -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Surface(
         onClick = onClick,
         enabled = enabled,
-        label = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(label)
-                if (pro) ProBadge()
+        shape = RoundedCornerShape(14.dp),
+        color = if (highlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.4f else 0.2f)),
+        modifier = modifier.fillMaxHeight(),
+    ) {
+        Box {
+            Column(
+                Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(icon, null, tint = if (enabled) MaterialTheme.colorScheme.primary else content, modifier = Modifier.size(22.dp))
+                Text(
+                    label,
+                    color = content,
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
-        },
-        leadingIcon = { Icon(icon, null, modifier = Modifier.size(18.dp)) },
-        colors = if (highlight) {
-            AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                labelColor = MaterialTheme.colorScheme.primary,
-                leadingIconContentColor = MaterialTheme.colorScheme.primary,
-            )
-        } else {
-            AssistChipDefaults.assistChipColors()
-        },
-    )
+            if (pro) Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) { ProBadge() }
+        }
+    }
 }
 
 /** Navigasi bawah berbentuk pil yang melayang di atas konten. */
