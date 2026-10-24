@@ -36,7 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
 
-private enum class Tab(val label: String) { PROFILE("Profil"), SHOP("Toko"), NIGHT("Night"), FAVORITES("Favorit"), HISTORY("Riwayat") }
+private enum class Tab(val label: String) { PROFILE("Profil"), SHOP("Toko"), NIGHT("Night"), FAVORITES("Favorit"), SETTINGS("Pengaturan") }
 
 @Composable
 fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
@@ -50,7 +50,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showFaq by rememberSaveable { mutableStateOf(false) }
+    var showAbout by rememberSaveable { mutableStateOf(false) }
     var showMatches by rememberSaveable { mutableStateOf(false) }
     var showContracts by rememberSaveable { mutableStateOf(false) }
     var showLoadout by rememberSaveable { mutableStateOf(false) }
@@ -100,41 +101,12 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         if (inStore != null) shopVm.openDetail(inStore.first, inStore.second) else shopVm.openDetail(SkinOffer(id, name, iconUrl, 0), 0)
     }
 
-    if (showSettings) {
-        SettingsScreen(
-            email = user?.email,
-            riotConnected = shop.connected,
-            lockEnabled = lockEnabled,
-            lockAvailable = AppLock.isAvailable(context),
-            message = settingsMessage,
-            onToggleLock = { enable ->
-                val activity = context as? FragmentActivity ?: return@SettingsScreen
-                // Verifikasi dulu agar kunci tidak bisa dinyalakan/dimatikan tanpa pemilik HP.
-                AppLock.authenticate(
-                    activity,
-                    title = if (enable) "Aktifkan kunci aplikasi" else "Matikan kunci aplikasi",
-                    onSuccess = {
-                        AppLock.setEnabled(context, enable)
-                        lockEnabled = enable
-                        settingsMessage = if (enable) "Kunci aplikasi aktif." else "Kunci aplikasi dimatikan."
-                    },
-                    onFailure = { settingsMessage = it },
-                )
-            },
-            onDisconnectRiot = {
-                shopVm.disconnectRiot()
-                settingsMessage = "Akun Riot diputuskan dan cookie login dihapus."
-            },
-            onSignOut = {
-                showSettings = false
-                shopVm.onSignOut()
-                authVm.signOut()
-            },
-            onBack = {
-                showSettings = false
-                settingsMessage = null
-            },
-        )
+    if (showFaq) {
+        FaqScreen(onBack = { showFaq = false })
+        return
+    }
+    if (showAbout) {
+        AboutScreen(onBack = { showAbout = false })
         return
     }
 
@@ -216,23 +188,10 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     LaunchedEffect(tab, uid) {
-        if (tab == Tab.HISTORY) shopVm.loadHistory(uid)
         if (tab == Tab.FAVORITES) shopVm.loadCatalog()
     }
 
     Scaffold(
-        topBar = {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(user?.email ?: "Valoid", Modifier.padding(top = 14.dp))
-                IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "Pengaturan") }
-            }
-        },
         bottomBar = {
             NavigationBar {
                 Tab.entries.forEach { t ->
@@ -241,13 +200,40 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
             }
         },
     ) { padding ->
-        androidx.compose.foundation.layout.Box(Modifier.padding(padding)) {
+        androidx.compose.foundation.layout.Box(Modifier.padding(padding).statusBarsPadding()) {
             when {
-                tab == Tab.HISTORY -> HistoryScreen(
-                    days = shop.history,
-                    loading = shop.historyLoading,
-                    error = shop.historyError,
-                    onRefresh = { shopVm.loadHistory(uid) },
+                tab == Tab.SETTINGS -> SettingsTab(
+                    email = user?.email,
+                    riotConnected = shop.connected,
+                    riotConnecting = shop.loading,
+                    lockEnabled = lockEnabled,
+                    lockAvailable = AppLock.isAvailable(context),
+                    message = settingsMessage,
+                    onToggleLock = { enable ->
+                        val activity = context as? FragmentActivity ?: return@SettingsTab
+                        // Verifikasi dulu agar kunci tidak bisa dinyalakan/dimatikan tanpa pemilik HP.
+                        AppLock.authenticate(
+                            activity,
+                            title = if (enable) "Aktifkan kunci aplikasi" else "Matikan kunci aplikasi",
+                            onSuccess = {
+                                AppLock.setEnabled(context, enable)
+                                lockEnabled = enable
+                                settingsMessage = if (enable) "Kunci aplikasi aktif." else "Kunci aplikasi dimatikan."
+                            },
+                            onFailure = { settingsMessage = it },
+                        )
+                    },
+                    onConnectRiot = { showRiotLogin = true },
+                    onDisconnectRiot = {
+                        shopVm.disconnectRiot()
+                        settingsMessage = "Akun Riot diputuskan dan cookie login dihapus."
+                    },
+                    onSignOut = {
+                        shopVm.onSignOut()
+                        authVm.signOut()
+                    },
+                    onOpenFaq = { showFaq = true },
+                    onOpenAbout = { showAbout = true },
                 )
                 tab == Tab.FAVORITES -> FavoritesScreen(
                     favorites = favorites,

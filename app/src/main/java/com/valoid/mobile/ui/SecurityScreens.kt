@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -61,26 +62,31 @@ fun LockScreen(error: String?, onUnlock: () -> Unit, onLeave: () -> Unit) {
     }
 }
 
+/** Isi tab Pengaturan: akun Valoid, akun Riot, kunci aplikasi, FAQ, dan Tentang. */
 @Composable
-fun SettingsScreen(
+fun SettingsTab(
     email: String?,
     riotConnected: Boolean,
+    riotConnecting: Boolean,
     lockEnabled: Boolean,
     lockAvailable: Boolean,
     message: String?,
     onToggleLock: (Boolean) -> Unit,
+    onConnectRiot: () -> Unit,
     onDisconnectRiot: () -> Unit,
     onSignOut: () -> Unit,
-    onBack: () -> Unit,
+    onOpenFaq: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
-    BackHandler(onBack = onBack)
     var confirmDisconnect by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali") }
-            Text("Pengaturan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            "Pengaturan",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+        )
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -97,6 +103,10 @@ fun SettingsScreen(
                 )
                 if (riotConnected) {
                     OutlinedButton(onClick = { confirmDisconnect = true }) { Text("Putuskan akun Riot") }
+                } else {
+                    Button(onClick = onConnectRiot, enabled = !riotConnecting) {
+                        Text(if (riotConnecting) "Menghubungkan..." else "Hubungkan akun Riot")
+                    }
                 }
             }
 
@@ -119,13 +129,8 @@ fun SettingsScreen(
 
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
-            SettingsCard("Privasi") {
-                Text(
-                    "Username dan password Riot diketik langsung di halaman resmi Riot dan tidak dibaca Valoid. " +
-                        "Token Riot hanya ada di memori. Firestore hanya menyimpan riwayat toko dan favorit.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            SettingsLink("Pertanyaan umum (FAQ)", onOpenFaq)
+            SettingsLink("Tentang Valoid", onOpenAbout)
         }
     }
 
@@ -153,6 +158,16 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, fontWeight = FontWeight.Bold)
             content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsLink(title: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
         }
     }
 }
