@@ -35,7 +35,6 @@ class MainActivity : FragmentActivity() {
         StoreCheckWorker.schedule(this)
         ProManager.init(this)
         RiotAccounts.init(this)
-        AdsManager.initialize(this)
         locked = AppLock.isEnabled(this)
         setContent {
             ValoidTheme {
@@ -56,6 +55,8 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+        // Formulir persetujuan iklan (UMP) butuh tampilan yang sudah terpasang; jalankan setelah setContent.
+        window.decorView.post { AdsManager.initialize(this) }
     }
 
     override fun onStart() {
