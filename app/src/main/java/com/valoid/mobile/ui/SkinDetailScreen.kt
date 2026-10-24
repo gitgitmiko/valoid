@@ -69,6 +69,8 @@ fun SkinDetailScreen(
     onBack: () -> Unit,
     favorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
+    isPro: Boolean = false,
+    onOpenPaywall: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
@@ -137,6 +139,8 @@ fun SkinDetailScreen(
                 onPlay = { videoUrl = it },
                 player = player,
                 onFullscreen = { fullscreen = true },
+                isPro = isPro,
+                onOpenPaywall = onOpenPaywall,
             )
         }
     }
@@ -151,6 +155,8 @@ private fun DetailContent(
     onPlay: (String?) -> Unit,
     player: ExoPlayer,
     onFullscreen: () -> Unit,
+    isPro: Boolean,
+    onOpenPaywall: () -> Unit,
 ) {
     var chroma by remember { mutableIntStateOf(0) }
     val secondsLeft = rememberSecondsLeft(state.endsAtMillis)
@@ -219,7 +225,8 @@ private fun DetailContent(
         }
 
         item { SectionTitle("Statistik") }
-        item { StatsCard(state.stats, accent) }
+        // Statistik dihitung dari riwayat toko, fitur Valoid Pro.
+        item { if (isPro) StatsCard(state.stats, accent) else StatsLocked(onOpenPaywall) }
 
         if (detail.chromas.size > 1) {
             item { SectionTitle("Chroma") }
@@ -345,3 +352,28 @@ private fun daysAgo(rotationDate: String): String {
 
 private fun formatDate(rotationDate: String): String =
     LocalDate.parse(rotationDate).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale("id", "ID")))
+
+@Composable
+private fun StatsLocked(onOpenPaywall: () -> Unit) {
+    Surface(
+        onClick = onOpenPaywall,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Riwayat skin ini di tokomu", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+                    ProBadge()
+                }
+                Text(
+                    "Lihat berapa kali skin ini muncul di tokomu dan kapan terakhir kali.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}

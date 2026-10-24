@@ -104,7 +104,7 @@ fun SettingsTab(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             SettingsCard("Valoid Pro") {
-                Text(if (isPro) "Aktif. Terima kasih sudah mendukung Valoid!" else "Toko tanpa iklan, skin favorit dan notifikasinya, serta banyak akun Riot.")
+                Text(if (isPro) "Aktif. Terima kasih sudah mendukung Valoid!" else "Toko tanpa iklan, skin favorit dan notifikasinya, riwayat toko, serta banyak akun Riot.")
                 if (isPro) {
                     OutlinedButton(onClick = onOpenPaywall) { Text("Detail langganan") }
                 } else {

@@ -200,6 +200,8 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
             onBack = shopVm::closeDetail,
             favorite = it.offer.id.lowercase() in favoriteIds,
             onToggleFavorite = { toggleFavorite(it.offer.id, it.detail?.name ?: it.offer.name, it.offer.iconUrl) },
+            isPro = isPro,
+            onOpenPaywall = { showPaywall = true },
         )
         return
     }
@@ -264,7 +266,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         }
         return
     }
-    if (showHistory) {
+    if (showHistory && isPro) {
         LaunchedEffect(Unit) { shopVm.loadHistory(uid) }
         SubPage(null, onBack = { showHistory = false }) {
             HistoryScreen(days = shop.history, loading = shop.historyLoading, error = shop.historyError, onRefresh = { shopVm.loadHistory(uid) })
@@ -410,7 +412,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                                 isPro = isPro,
                                 onNight = { showNight = true },
                                 onFavorites = { if (isPro) showFavorites = true else showPaywall = true },
-                                onHistory = { showHistory = true },
+                                onHistory = { if (isPro) showHistory = true else showPaywall = true },
                             )
                             sessionEndsAt?.let { StoreSessionBanner(it, onPro = { showPaywall = true }) }
                             shop.wallet?.let { WalletBar(it) }
@@ -450,7 +452,7 @@ fun StoreShortcuts(nightAvailable: Boolean, isPro: Boolean, onNight: () -> Unit,
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ShortcutTile("Night Market", Icons.Filled.Star, Modifier.weight(1f), enabled = nightAvailable, highlight = nightAvailable, onClick = onNight)
         ShortcutTile("Favorit", Icons.Filled.Favorite, Modifier.weight(1f), pro = !isPro, onClick = onFavorites)
-        ShortcutTile("Riwayat", Icons.Filled.DateRange, Modifier.weight(1f), onClick = onHistory)
+        ShortcutTile("Riwayat", Icons.Filled.DateRange, Modifier.weight(1f), pro = !isPro, onClick = onHistory)
     }
 }
 

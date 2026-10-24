@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
@@ -52,6 +53,7 @@ private val PERKS = listOf(
     Perk(Icons.Filled.ShoppingCart, "Toko harian tanpa iklan", "Toko harian langsung terbuka tanpa perlu menonton iklan."),
     Perk(Icons.Filled.Favorite, "Skin favorit", "Simpan skin incaranmu dan lihat kapan muncul di tokomu."),
     Perk(Icons.Filled.Notifications, "Notifikasi favorit", "Dapat pemberitahuan di hari skin favoritmu masuk toko."),
+    Perk(Icons.Filled.DateRange, "Riwayat toko", "Semua toko harianmu tercatat, plus berapa kali tiap skin muncul untukmu."),
     Perk(Icons.Filled.Person, "Banyak akun Riot", "Tautkan beberapa akun Riot dan berpindah dengan sekali ketuk."),
 )
 
@@ -78,7 +80,7 @@ fun PaywallScreen(onClose: () -> Unit) {
             ValoidLogo(104.dp)
             Text("VALOID PRO", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             Text(
-                "Toko tanpa iklan, skin favorit dengan notifikasi, dan banyak akun Riot.",
+                "Toko tanpa iklan, skin favorit dengan notifikasi, riwayat toko, dan banyak akun Riot.",
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 8.dp),
