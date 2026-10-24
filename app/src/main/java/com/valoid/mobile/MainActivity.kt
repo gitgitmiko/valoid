@@ -4,13 +4,19 @@ import android.os.Bundle
 import android.os.SystemClock
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
 import com.valoid.mobile.notify.StoreCheckWorker
 import com.valoid.mobile.security.AppLock
 import com.valoid.mobile.ui.LockScreen
+import com.valoid.mobile.ui.Onboarding
+import com.valoid.mobile.ui.OnboardingScreen
+import com.valoid.mobile.ui.SplashScreen
+import kotlinx.coroutines.delay
 import com.valoid.mobile.ui.ValoidApp
 import com.valoid.mobile.ui.ValoidTheme
 
@@ -28,9 +34,19 @@ class MainActivity : FragmentActivity() {
         setContent {
             ValoidTheme {
                 // Aplikasi tetap dirender di bawah layar kunci agar keadaannya tidak hilang.
-                Box {
-                    ValoidApp()
-                    if (locked) LockScreen(error = lockError, onUnlock = ::unlock, onLeave = { moveTaskToBack(true) })
+                var splash by remember { mutableStateOf(true) }
+                var onboarded by remember { mutableStateOf(Onboarding.isDone(this)) }
+                LaunchedEffect(Unit) {
+                    delay(1200)
+                    splash = false
+                }
+                when {
+                    splash -> SplashScreen()
+                    !onboarded -> OnboardingScreen(onFinish = { onboarded = true })
+                    else -> Box {
+                        ValoidApp()
+                        if (locked) LockScreen(error = lockError, onUnlock = ::unlock, onLeave = { moveTaskToBack(true) })
+                    }
                 }
             }
         }
