@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.valoid.mobile"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.valoid.mobile"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 34
         // ID AdMob: isi admobAppId/admobRewardedId di gradle.properties. Bawaannya ID uji resmi Google.
         val admobAppId = (project.findProperty("admobAppId") as String?) ?: "ca-app-pub-3940256099942544~3347511713"
@@ -23,9 +25,25 @@ android {
         versionName = "0.17.0"
     }
 
+    // Kunci upload Play: keystore.properties (tidak di-commit) berisi storeFile, storePassword, keyAlias, keyPassword.
+    val keystoreFile = rootProject.file("keystore.properties")
+    val uploadSigning = if (keystoreFile.exists()) {
+        val props = Properties().apply { keystoreFile.inputStream().use { load(it) } }
+        signingConfigs.create("upload") {
+            storeFile = file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        }
+    } else {
+        null
+    }
+
     buildTypes {
         release {
+            signingConfig = uploadSigning
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
