@@ -93,7 +93,7 @@ fun ValoidApp(
     val favorites by shopVm.favorites.collectAsStateWithLifecycle()
     val skinCatalog by shopVm.skinCatalog.collectAsStateWithLifecycle()
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    var tab by rememberSaveable { mutableStateOf(Tab.SHOP) }
+    var tab by rememberSaveable { mutableStateOf(Tab.HUB) }
     var showRiotLogin by rememberSaveable { mutableStateOf(false) }
     var showFaq by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }

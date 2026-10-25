@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.valoid.mobile.data.BlockedUser
+import com.valoid.mobile.data.RankRooms
 import com.valoid.mobile.data.Report
 import java.time.Instant
 import java.time.ZoneId
@@ -130,7 +131,7 @@ fun ReportsScreen(
                 val r = group.first()
                 Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("${r.targetName} · ${r.room}", fontWeight = FontWeight.Bold)
+                        Text("${r.targetName} · ${RankRooms.titleOf(r.room)}", fontWeight = FontWeight.Bold)
                         Text("\"${r.text}\"")
                         Text(
                             "${group.size} laporan: " + group.map { it.reason.label }.distinct().joinToString(", "),

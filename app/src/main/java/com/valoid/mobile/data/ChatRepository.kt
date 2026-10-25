@@ -39,6 +39,16 @@ object RankRooms {
         else -> "ascendant-plus" to "Ascendant+"
     }
 
+    private val groups = listOf("unranked", "iron-bronze", "silver-gold", "plat-diamond", "ascendant-plus")
+
+    /** Nama room untuk tampilan: "global" -> "Room semua user", "ap-plat-diamond" -> "Asia Pasifik · Platinum–Diamond". */
+    fun titleOf(roomId: String): String {
+        if (roomId == "global") return "Room semua user"
+        val group = groups.firstOrNull { roomId.endsWith("-$it") } ?: return roomId
+        val tier = when (group) { "unranked" -> 0; "iron-bronze" -> 3; "silver-gold" -> 9; "plat-diamond" -> 15; else -> 21 }
+        return "${RiotRegion.labelOf(roomId.removeSuffix("-$group"))} · ${groupOf(tier).second}"
+    }
+
     fun forIdentity(identity: ChatIdentity): RankRoom {
         val (group, label) = groupOf(identity.tier)
         return RankRoom("${identity.region}-$group", "${RiotRegion.labelOf(identity.region)} · $label")
