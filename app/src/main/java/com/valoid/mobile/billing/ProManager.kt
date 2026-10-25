@@ -132,9 +132,9 @@ object ProManager : PurchasesUpdatedListener {
                 ),
             )
             .build()
-        c.queryProductDetailsAsync(params) { result, list ->
+        c.queryProductDetailsAsync(params) { result, queried ->
             if (result.responseCode != BillingClient.BillingResponseCode.OK) return@queryProductDetailsAsync
-            details = list.firstOrNull()
+            details = queried.productDetailsList.firstOrNull()
             _price.value = details?.subscriptionOfferDetails?.firstOrNull()
                 ?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
         }
