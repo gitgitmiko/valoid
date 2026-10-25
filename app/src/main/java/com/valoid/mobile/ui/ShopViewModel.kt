@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.valoid.mobile.data.BundleOffer
 import com.valoid.mobile.data.CareerSummary
+import com.valoid.mobile.data.DemoMode
 import com.valoid.mobile.data.ContractsOverview
 import com.valoid.mobile.data.FavoriteSkin
 import com.valoid.mobile.data.FavoritesRepository
@@ -157,6 +158,9 @@ class ShopViewModel(
 
     private var autoConnectTried = false
 
+    /** Akun Valoid ini adalah akun Mode Demo; sesi Riot memakai data contoh (lihat [DemoMode]). */
+    private var demo = false
+
     val accounts: StateFlow<List<RiotAccount>> = RiotAccounts.accounts
     val activeAccountId: StateFlow<String?> = RiotAccounts.activeId
 
@@ -165,16 +169,21 @@ class ShopViewModel(
     /** Mencoba lagi login otomatis memakai sesi akun aktif (tombol "Coba lagi"). */
     fun retryConnect(uid: String) {
         autoConnectTried = false
-        autoConnect(uid)
+        autoConnect(uid, demo)
     }
 
     /**
      * Login Riot otomatis sekali per sesi aplikasi memakai cookie akun aktif. Cookie lama yang masih
      * tersimpan di WebView (versi sebelum banyak akun) dipindahkan ke daftar akun terenkripsi.
      */
-    fun autoConnect(uid: String) {
+    fun autoConnect(uid: String, demo: Boolean = this.demo) {
+        this.demo = demo
         if (autoConnectTried || session != null) return
         autoConnectTried = true
+        if (demo && (RiotAccounts.active() == null || RiotAccounts.activeId.value == DemoMode.PUUID)) {
+            connectDemo(uid)
+            return
+        }
         val account = RiotAccounts.active()
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
@@ -192,6 +201,15 @@ class ShopViewModel(
                 }
             }
         }
+    }
+
+    private fun connectDemo(uid: String) {
+        if (RiotAccounts.accounts.value.none { it.puuid == DemoMode.PUUID }) RiotAccounts.upsert(DemoMode.account)
+        RiotAccounts.setActive(DemoMode.PUUID)
+        session = DemoMode.session
+        _state.update { it.copy(connected = true, region = DemoMode.session.region) }
+        loadProfile()
+        refresh(uid)
     }
 
     /** Dipanggil setelah login di halaman Riot: simpan cookie sesi akun ini lalu hubungkan. */
@@ -400,6 +418,7 @@ class ShopViewModel(
         RiotAuth.clear()
         session = null
         autoConnectTried = false
+        demo = false
         favoritesJob?.cancel()
         favoritesJob = null
         _favorites.value = emptyList()

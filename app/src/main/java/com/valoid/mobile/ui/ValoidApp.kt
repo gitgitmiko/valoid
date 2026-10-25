@@ -62,6 +62,7 @@ import com.valoid.mobile.R
 import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.ads.StoreUnlock
 import com.valoid.mobile.billing.ProManager
+import com.valoid.mobile.data.DemoMode
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
 
@@ -106,6 +107,9 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     var lockEnabled by remember { mutableStateOf(AppLock.isEnabled(context)) }
     var settingsMessage by remember { mutableStateOf<String?>(null) }
 
+    val demo = DemoMode.isDemo(user?.email)
+    LaunchedEffect(demo) { ProManager.setDemo(demo) }
+
     val uid = user?.uid
     if (uid == null) {
         AuthScreen(authVm)
@@ -124,7 +128,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     }
 
     LaunchedEffect(uid) {
-        shopVm.autoConnect(uid)
+        shopVm.autoConnect(uid, demo)
         shopVm.watchFavorites(uid)
     }
 

@@ -32,7 +32,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Klien untuk endpoint Riot. Catatan: endpoint toko tidak didokumentasikan secara resmi
  * oleh Riot dan dapat berubah sewaktu-waktu.
  */
-class RiotRepository(private val client: OkHttpClient = OkHttpClient()) {
+class RiotRepository(
+    private val client: OkHttpClient = OkHttpClient.Builder().addInterceptor(DemoInterceptor()).build(),
+) {
 
     private val noRedirects = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
 

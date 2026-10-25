@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
 import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.billing.ProManager
+import com.valoid.mobile.data.DemoMode
 import com.valoid.mobile.data.RiotAccounts
 import com.valoid.mobile.notify.StoreCheckWorker
 import com.valoid.mobile.security.AppLock
@@ -35,6 +36,7 @@ class MainActivity : FragmentActivity() {
         StoreCheckWorker.schedule(this)
         ProManager.init(this)
         RiotAccounts.init(this)
+        DemoMode.init(this)
         locked = AppLock.isEnabled(this)
         setContent {
             ValoidTheme {

@@ -158,8 +158,16 @@ object ProManager : PurchasesUpdatedListener {
         }
     }
 
+    /** Akun Mode Demo (peninjau Google Play) mendapat semua fitur Pro tanpa langganan. */
+    private var demo = false
+
+    fun setDemo(enabled: Boolean) {
+        demo = enabled
+        if (::appContext.isInitialized) publish()
+    }
+
     private fun publish() {
-        _isPro.value = purchaseActive || debugOverride
+        _isPro.value = purchaseActive || debugOverride || demo
     }
 
     private fun prefs() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

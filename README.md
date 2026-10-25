@@ -26,6 +26,8 @@ Fitur: login Google, login email/password dengan reset password, toko harian, Ni
 3. `gradle :app:bundleRelease` → `app/build/outputs/bundle/release/app-release.aab`.
 4. Setelah Play App Signing aktif, tambahkan SHA-1/SHA-256 kunci penandatanganan aplikasi dari Play Console ke app Firebase agar login Google berfungsi.
 
+Mode Demo untuk peninjau Play: akun `playreview@gitgitdev.my.id` (lihat `DemoMode.kt`) memakai data contoh dari `app/src/main/assets/demo/`. Jalankan `python3 tools/make_demo_data.py` sebelum rilis agar Battle Pass dan rank mengikuti act yang berjalan.
+
 Kebijakan privasi: https://gitgitdev.my.id/valoid/privacy/ · Hapus akun: https://gitgitdev.my.id/valoid/hapus-akun/
 
 ## Catatan
