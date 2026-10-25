@@ -11,7 +11,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.RadioButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import com.valoid.mobile.data.PartyMode
+import com.valoid.mobile.data.ReportReason
 import com.valoid.mobile.data.PartyPost
 import com.valoid.mobile.data.PartySize
 import com.valoid.mobile.data.RiotRegion
@@ -78,12 +84,29 @@ fun ChatRoomScreen(
     error: String?,
     onSend: (text: String, party: PartyPost?, onSent: () -> Unit) -> Unit,
     onBack: () -> Unit,
+    banned: Boolean = false,
+    isAdmin: Boolean = false,
+    notice: String? = null,
+    onNoticeShown: () -> Unit = {},
+    onReport: (ChatMessage, ReportReason, String) -> Unit = { _, _, _ -> },
+    onBlock: (ChatMessage) -> Unit = {},
+    onAdminDelete: (ChatMessage) -> Unit = {},
+    onAdminBan: (ChatMessage) -> Unit = {},
 ) {
     var partyDialog by rememberSaveable { mutableStateOf(false) }
+    var actionsFor by remember { mutableStateOf<ChatMessage?>(null) }
+    var reportFor by remember { mutableStateOf<ChatMessage?>(null) }
+    var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     BackHandler(onBack = onBack)
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(notice) {
+        notice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            onNoticeShown()
+        }
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali") }
@@ -102,14 +125,27 @@ fun ChatRoomScreen(
                 item { Text("Belum ada pesan. Sapa yang lain!", modifier = Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
             }
             items(messages, key = { it.id }) { m ->
-                MessageRow(m, mine = m.uid == myUid, onCopyId = {
-                    clipboard.setText(AnnotatedString(m.riotId))
-                    Toast.makeText(context, "Riot ID ${m.riotId} disalin. Kirim invite atau request di game.", Toast.LENGTH_SHORT).show()
-                })
+                MessageRow(
+                    m,
+                    mine = m.uid == myUid,
+                    onCopyId = {
+                        clipboard.setText(AnnotatedString(m.riotId))
+                        Toast.makeText(context, "Riot ID ${m.riotId} disalin. Kirim invite atau request di game.", Toast.LENGTH_SHORT).show()
+                    },
+                    onLongPress = { actionsFor = m },
+                )
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
-        Row(
+        if (banned) {
+            Surface(color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f), modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+                Text(
+                    "Akunmu diblokir dari chat karena melanggar aturan komunitas. Hubungi support@gitgitdev.my.id bila ini keliru.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        } else Row(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -134,6 +170,54 @@ fun ChatRoomScreen(
                 }
             }
         }
+    }
+    actionsFor?.let { m ->
+        val mine = m.uid == myUid
+        val close = { actionsFor = null }
+        AlertDialog(
+            onDismissRequest = close,
+            title = { Text(m.riotId) },
+            text = {
+                Column {
+                    ActionItem("Salin Riot ID") {
+                        close()
+                        clipboard.setText(AnnotatedString(m.riotId))
+                        Toast.makeText(context, "Riot ID ${m.riotId} disalin", Toast.LENGTH_SHORT).show()
+                    }
+                    if (!mine) {
+                        ActionItem("Laporkan pesan") { close(); reportFor = m }
+                        ActionItem("Blokir ${m.name}") {
+                            close()
+                            confirm = "Blokir ${m.riotId}? Pesannya tidak akan tampil lagi untukmu. Bisa dibuka di Pengaturan." to { onBlock(m) }
+                        }
+                    }
+                    if (isAdmin) {
+                        ActionItem("Hapus pesan (admin)", danger = true) {
+                            close()
+                            confirm = "Hapus pesan ini untuk semua orang?" to { onAdminDelete(m) }
+                        }
+                        if (!mine) {
+                            ActionItem("Ban dari chat (admin)", danger = true) {
+                                close()
+                                confirm = "Ban ${m.riotId} dari semua room chat?" to { onAdminBan(m) }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = close) { Text("Tutup") } },
+        )
+    }
+    reportFor?.let { m ->
+        ReportDialog(m, onSubmit = { reason, detail -> reportFor = null; onReport(m, reason, detail) }, onDismiss = { reportFor = null })
+    }
+    confirm?.let { (question, action) ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            text = { Text(question) },
+            confirmButton = { TextButton(onClick = { confirm = null; action() }) { Text("Ya") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Batal") } },
+        )
     }
     if (partyDialog) {
         PartyDialog(
@@ -225,8 +309,51 @@ private fun PartyCard(m: ChatMessage, party: PartyPost, mine: Boolean, onJoin: (
 }
 
 @Composable
-private fun MessageRow(m: ChatMessage, mine: Boolean, onCopyId: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+private fun ActionItem(label: String, danger: Boolean = false, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+    )
+}
+
+@Composable
+private fun ReportDialog(m: ChatMessage, onSubmit: (ReportReason, String) -> Unit, onDismiss: () -> Unit) {
+    var reason by remember { mutableStateOf<ReportReason?>(null) }
+    var detail by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Laporkan pesan") },
+        text = {
+            Column {
+                Text("\"${m.text.take(120)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                ReportReason.entries.forEach { r ->
+                    Row(Modifier.fillMaxWidth().clickable { reason = r }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = reason == r, onClick = { reason = r })
+                        Text(r.label)
+                    }
+                }
+                OutlinedTextField(
+                    value = detail,
+                    onValueChange = { detail = it.take(300) },
+                    label = { Text("Keterangan (opsional)") },
+                    maxLines = 3,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { reason?.let { onSubmit(it, detail.trim()) } }, enabled = reason != null) { Text("Kirim laporan") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } },
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MessageRow(m: ChatMessage, mine: Boolean, onCopyId: () -> Unit, onLongPress: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().combinedClickable(onClick = {}, onLongClick = onLongPress),
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+    ) {
         if (!mine) {
             Avatar(m.cardArt, 36)
             Spacer(Modifier.size(8.dp))

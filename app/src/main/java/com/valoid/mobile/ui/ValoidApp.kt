@@ -111,6 +111,15 @@ fun ValoidApp(
     val chatMessages by chatVm.messages.collectAsStateWithLifecycle()
     val roomOnline by chatVm.roomOnline.collectAsStateWithLifecycle()
     val chatState by chatVm.state.collectAsStateWithLifecycle()
+    val blockedUsers by chatVm.blocked.collectAsStateWithLifecycle()
+    val isAdmin by chatVm.isAdmin.collectAsStateWithLifecycle()
+    val isBanned by chatVm.isBanned.collectAsStateWithLifecycle()
+    val reports by chatVm.reports.collectAsStateWithLifecycle()
+    val chatNotice by chatVm.notice.collectAsStateWithLifecycle()
+    var showBlocked by rememberSaveable { mutableStateOf(false) }
+    var showReports by rememberSaveable { mutableStateOf(false) }
+    var pendingRoom by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(user?.uid) { chatVm.setUser(user?.uid) }
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
@@ -321,6 +330,36 @@ fun ValoidApp(
     val rankRoom = chatIdentity?.let { RankRooms.forIdentity(it) }
     val rankRoomOnline by remember(rankRoom?.id) { rankRoom?.let { chatVm.roomCount(it.id) } ?: flowOf(null) }
         .collectAsStateWithLifecycle(null)
+    // Aturan komunitas wajib disetujui sebelum pertama kali masuk room.
+    fun enterRoom(room: String) {
+        if (CommunityRules.isAccepted(context, uid)) chatVm.openRoom(room, uid) else pendingRoom = room
+    }
+    pendingRoom?.let { room ->
+        CommunityRulesDialog(
+            onAccept = {
+                CommunityRules.accept(context, uid)
+                pendingRoom = null
+                chatVm.openRoom(room, uid)
+            },
+            onDismiss = { pendingRoom = null },
+        )
+    }
+
+    if (showReports && isAdmin) {
+        ReportsScreen(
+            reports = reports,
+            onDeleteMessage = { chatVm.deleteMessage(it.room, it.messageId) },
+            onBan = { chatVm.ban(it.targetUid, it.targetName, it.reason.label) },
+            onDismiss = { group -> chatVm.dismissReports(group.map { it.id }) },
+            onBack = { showReports = false },
+        )
+        return
+    }
+    if (showBlocked) {
+        BlockedUsersScreen(blockedUsers, onUnblock = chatVm::unblock, onBack = { showBlocked = false })
+        return
+    }
+
     chatRoom?.let { room ->
         ChatRoomScreen(
             title = if (room == ROOM_GLOBAL) "Room semua user" else "Room ${rankRoom?.title ?: room}",
@@ -331,6 +370,14 @@ fun ValoidApp(
             error = chatState.error,
             onSend = { text, party, onSent -> chatIdentity?.let { chatVm.send(it, text, party, onSent) } },
             onBack = { chatVm.closeRoom(uid) },
+            banned = isBanned,
+            isAdmin = isAdmin,
+            notice = chatNotice,
+            onNoticeShown = chatVm::clearNotice,
+            onReport = chatVm::report,
+            onBlock = chatVm::block,
+            onAdminDelete = { chatVm.deleteMessage(room, it.id) },
+            onAdminBan = { chatVm.ban(it.uid, it.riotId, "Dari chat") },
         )
         return
     }
@@ -419,6 +466,9 @@ fun ValoidApp(
                     deleteUsesPassword = authVm.usesPassword,
                     deleteRunning = deleteState.running,
                     deleteError = deleteState.error,
+                    onOpenBlocked = { showBlocked = true },
+                    reportCount = if (isAdmin) reports.groupBy { it.messageId }.size else null,
+                    onOpenReports = { showReports = true },
                     onDeleteAccount = { password ->
                         authVm.deleteAccount(
                             activityContext = context,
@@ -450,7 +500,7 @@ fun ValoidApp(
                     onlineCount = onlineCount,
                     onOpenGlobal = {
                         when {
-                            chatIdentity != null -> chatVm.openRoom(ROOM_GLOBAL, uid)
+                            chatIdentity != null -> enterRoom(ROOM_GLOBAL)
                             shop.connected -> shopVm.loadProfile()
                             else -> showProfile = true
                         }
@@ -459,7 +509,7 @@ fun ValoidApp(
                     rankRoomOnline = rankRoomOnline,
                     onOpenRankRoom = {
                         when {
-                            rankRoom != null -> chatVm.openRoom(rankRoom.id, uid)
+                            rankRoom != null -> enterRoom(rankRoom.id)
                             shop.connected -> shopVm.loadProfile()
                             else -> showProfile = true
                         }

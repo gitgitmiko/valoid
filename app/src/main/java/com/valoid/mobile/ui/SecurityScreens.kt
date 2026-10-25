@@ -96,6 +96,9 @@ fun SettingsTab(
     deleteRunning: Boolean = false,
     deleteError: String? = null,
     onDeleteAccount: (password: String?) -> Unit = {},
+    onOpenBlocked: () -> Unit = {},
+    reportCount: Int? = null,
+    onOpenReports: () -> Unit = {},
 ) {
     var confirmRemove by remember { mutableStateOf<RiotAccount?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -201,6 +204,8 @@ fun SettingsTab(
 
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
+            reportCount?.let { SettingsLink("Laporan chat (admin) · $it", onOpenReports) }
+            SettingsLink("Pengguna diblokir", onOpenBlocked)
             SettingsLink("Pertanyaan umum (FAQ)", onOpenFaq)
             SettingsLink("Tentang Valoid Hub", onOpenAbout)
         }
