@@ -16,11 +16,11 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 37
+        versionCode = 38
         // Build debug memakai ID uji resmi Google agar pengujian tidak menghasilkan klik tidak valid.
         manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
-        versionName = "0.19.0"
+        versionName = "0.20.0"
     }
 
     // Kunci upload Play: keystore.properties (tidak di-commit) berisi storeFile, storePassword, keyAlias, keyPassword.
@@ -85,6 +85,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-database")
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")

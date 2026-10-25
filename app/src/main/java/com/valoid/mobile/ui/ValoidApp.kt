@@ -56,6 +56,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.BuildConfig
@@ -63,7 +64,9 @@ import com.valoid.mobile.R
 import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.ads.StoreUnlock
 import com.valoid.mobile.billing.ProManager
+import com.valoid.mobile.data.ChatIdentity
 import com.valoid.mobile.data.DemoMode
+import com.valoid.mobile.data.Presence
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
 
@@ -78,6 +81,7 @@ fun ValoidApp(
     authVm: AuthViewModel = viewModel(),
     shopVm: ShopViewModel = viewModel(),
     hubVm: HubViewModel = viewModel(),
+    chatVm: ChatViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val user by authVm.user.collectAsStateWithLifecycle()
@@ -100,6 +104,11 @@ fun ValoidApp(
     val announcements by hubVm.announcements.collectAsStateWithLifecycle()
     var showProfile by rememberSaveable { mutableStateOf(false) }
     var showAnnouncements by rememberSaveable { mutableStateOf(false) }
+    val onlineCount by chatVm.onlineCount.collectAsStateWithLifecycle()
+    val chatRoom by chatVm.room.collectAsStateWithLifecycle()
+    val chatMessages by chatVm.messages.collectAsStateWithLifecycle()
+    val roomOnline by chatVm.roomOnline.collectAsStateWithLifecycle()
+    val chatState by chatVm.state.collectAsStateWithLifecycle()
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
@@ -133,6 +142,12 @@ fun ValoidApp(
             onCancel = { showRiotLogin = false },
         )
         return
+    }
+
+    // Terhitung online selama aplikasi terbuka di layar.
+    LifecycleStartEffect(uid) {
+        Presence.goOnline(uid)
+        onStopOrDispose { Presence.goOffline(uid) }
     }
 
     LaunchedEffect(uid) {
@@ -288,6 +303,33 @@ fun ValoidApp(
         return
     }
 
+    // Identitas chat dari akun Riot aktif; chat butuh akun Riot terhubung.
+    val chatIdentity = shop.profile?.let { p ->
+        val name = p.gameName ?: return@let null
+        ChatIdentity(
+            name = name,
+            tag = p.tagLine.orEmpty(),
+            tier = p.currentRank?.tier ?: 0,
+            tierName = p.currentRank?.tierName,
+            rankIcon = p.currentRank?.iconUrl,
+            cardArt = p.cardSmallArt,
+            region = shop.region.shard,
+        )
+    }
+    chatRoom?.let { room ->
+        ChatRoomScreen(
+            title = if (room == ROOM_GLOBAL) "Room semua user" else room,
+            online = roomOnline,
+            messages = chatMessages,
+            myUid = uid,
+            sending = chatState.sending,
+            error = chatState.error,
+            onSend = { text, onSent -> chatIdentity?.let { chatVm.send(it, text, onSent) } },
+            onBack = { chatVm.closeRoom(uid) },
+        )
+        return
+    }
+
     if (showAnnouncements) {
         AnnouncementsScreen(announcements, onBack = { showAnnouncements = false })
         return
@@ -400,6 +442,14 @@ fun ValoidApp(
                     announcements = announcements,
                     onOpenProfile = { showProfile = true },
                     onOpenAnnouncements = { showAnnouncements = true },
+                    onlineCount = onlineCount,
+                    onOpenGlobal = {
+                        when {
+                            chatIdentity != null -> chatVm.openRoom(ROOM_GLOBAL, uid)
+                            shop.connected -> shopVm.loadProfile()
+                            else -> showProfile = true
+                        }
+                    },
                 )
                 !shop.connected -> ConnectRiotPrompt(
                     state = shop,

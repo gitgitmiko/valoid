@@ -26,6 +26,45 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // Profil publik di chat. lastMessageAt hanya boleh diisi waktu server (ditulis bersama pesan).
+    function validChatUser() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'tag', 'tier', 'tierName', 'rankIcon', 'cardArt', 'region', 'lastMessageAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 32
+        && d.tag is string && d.tag.size() <= 8
+        && d.tier is int && d.tier >= 0 && d.tier <= 27
+        && d.region in ['ap', 'eu', 'na', 'kr']
+        && (!('lastMessageAt' in d) || d.lastMessageAt == request.time
+            || (resource != null && 'lastMessageAt' in resource.data && d.lastMessageAt == resource.data.lastMessageAt));
+    }
+
+    match /chatUsers/{uid} {
+      allow read: if signedIn();
+      allow create, update: if owner(uid) && validChatUser();
+    }
+
+    function chatUser() {
+      return /databases/$(database)/documents/chatUsers/$(request.auth.uid);
+    }
+
+    // Pesan room: hanya dibuat oleh pengirimnya, dengan identitas sama seperti chatUsers,
+    // paling cepat satu pesan per 3 detik. Tidak bisa diubah atau dihapus pengguna.
+    match /rooms/{room}/messages/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && room.matches('^[a-z0-9-]{1,40}$')
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'tag', 'tierName', 'rankIcon', 'cardArt', 'region', 'text', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+        && request.resource.data.createdAt == request.time
+        && getAfter(chatUser()).data.lastMessageAt == request.time
+        && request.resource.data.name == getAfter(chatUser()).data.name
+        && request.resource.data.tag == getAfter(chatUser()).data.tag
+        && (!exists(chatUser()) || !('lastMessageAt' in get(chatUser()).data)
+            || get(chatUser()).data.lastMessageAt < request.time - duration.value(3, 's'));
+    }
+
     // Penanda akun Riot agar riwayatnya bisa ditemukan saat akun Valoid dihapus.
     match /users/{uid}/accounts/{puuid} {
       allow read, delete: if owner(uid);

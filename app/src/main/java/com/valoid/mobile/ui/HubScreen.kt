@@ -53,6 +53,8 @@ fun HubScreen(
     announcements: List<Announcement>,
     onOpenProfile: () -> Unit,
     onOpenAnnouncements: () -> Unit,
+    onlineCount: Int?,
+    onOpenGlobal: () -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -73,7 +75,9 @@ fun HubScreen(
             }
         }
         item { AnnouncementCard(announcements.firstOrNull(), onOpenAnnouncements) }
-        item { RoomCard("Room semua user", "Ngobrol dan cari full party 5 orang.", null) }
+        item {
+            RoomCard("Room semua user", "Ngobrol dan cari full party 5 orang.", null, online = onlineCount, onClick = onOpenGlobal)
+        }
         item {
             val rank = profile?.currentRank
             RoomCard(
@@ -146,8 +150,14 @@ private fun AnnouncementCard(latest: Announcement?, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RoomCard(title: String, subtitle: String, iconUrl: String?) {
-    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+private fun RoomCard(title: String, subtitle: String, iconUrl: String?, online: Int? = null, onClick: (() -> Unit)? = null) {
+    Surface(
+        onClick = onClick ?: {},
+        enabled = onClick != null,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (iconUrl != null) {
                 AsyncImage(iconUrl, null, modifier = Modifier.size(44.dp).padding(end = 12.dp))
@@ -155,8 +165,14 @@ private fun RoomCard(title: String, subtitle: String, iconUrl: String?) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(subtitle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                Text("Segera hadir", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp))
+                Box(Modifier.padding(top = 6.dp)) {
+                    when {
+                        onClick == null -> Text("Segera hadir", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        online != null -> OnlineLabel(online)
+                    }
+                }
             }
+            if (onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
         }
     }
 }
