@@ -54,7 +54,9 @@ class ChatViewModel(
         .flatMapLatest { uid -> uid?.let { moderation.isBanned(it).catch { emit(false) } } ?: flowOf(false) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val onlineCount: StateFlow<Int?> = Presence.onlineCount().catch { }
+    // Mulai mendengarkan setelah masuk; sebelum itu Realtime Database menolak dan pendengar tidak dicoba ulang.
+    val onlineCount: StateFlow<Int?> = _uid
+        .flatMapLatest { uid -> if (uid == null) flowOf(null) else Presence.onlineCount().catch { } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _room = MutableStateFlow<String?>(null)
