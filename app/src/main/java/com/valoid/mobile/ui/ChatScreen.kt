@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import com.valoid.mobile.data.PartyMode
 import com.valoid.mobile.data.PartyPost
 import com.valoid.mobile.data.PartySize
+import com.valoid.mobile.data.RiotRegion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -235,7 +236,7 @@ private fun MessageRow(m: ChatMessage, mine: Boolean, onCopyId: () -> Unit) {
                 m.rankIcon?.let { AsyncImage(it, m.tierName, modifier = Modifier.size(18.dp)) }
                 Text(m.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
                 Text(" #${m.tag}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                m.region?.let { Text(" · ${it.uppercase()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)) }
+                m.region?.let { Text(" · ${RiotRegion.labelOf(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)) }
             }
             if (m.party != null) {
                 PartyCard(m, m.party, mine, onJoin = onCopyId)

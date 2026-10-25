@@ -1,10 +1,16 @@
 package com.valoid.mobile.data
 
 enum class RiotRegion(val shard: String, val label: String) {
-    NA("na", "North America"),
-    EU("eu", "Europe"),
-    AP("ap", "Asia Pacific"),
+    NA("na", "Amerika"),
+    EU("eu", "Eropa"),
+    AP("ap", "Asia Pasifik"),
     KR("kr", "Korea"),
+    ;
+
+    companion object {
+        /** Nama wilayah untuk kode shard ("ap" -> "Asia Pasifik"); kode tak dikenal ditampilkan apa adanya. */
+        fun labelOf(shard: String): String = entries.firstOrNull { it.shard == shard }?.label ?: shard.uppercase()
+    }
 }
 
 data class RiotSession(

@@ -41,7 +41,7 @@ object RankRooms {
 
     fun forIdentity(identity: ChatIdentity): RankRoom {
         val (group, label) = groupOf(identity.tier)
-        return RankRoom("${identity.region}-$group", "${identity.region.uppercase()} · $label")
+        return RankRoom("${identity.region}-$group", "${RiotRegion.labelOf(identity.region)} · $label")
     }
 }
 
