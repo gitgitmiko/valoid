@@ -202,7 +202,7 @@ fun SettingsTab(
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
             SettingsLink("Pertanyaan umum (FAQ)", onOpenFaq)
-            SettingsLink("Tentang Valoid", onOpenAbout)
+            SettingsLink("Tentang Valoid Hub", onOpenAbout)
         }
     }
 

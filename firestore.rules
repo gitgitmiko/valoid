@@ -17,6 +17,11 @@ service cloud.firestore {
         && request.resource.data.offers.size() <= 8;
     }
 
+    // Info dari developer; ditulis admin lewat tools/post_announcement.py.
+    match /announcements/{id} {
+      allow read: if true;
+    }
+
     function owner(uid) {
       return signedIn() && request.auth.uid == uid;
     }

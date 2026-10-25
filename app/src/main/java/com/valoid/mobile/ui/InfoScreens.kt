@@ -118,12 +118,12 @@ fun AboutScreen(onBack: () -> Unit) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "-"
     }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        PageHeader("Tentang Valoid", onBack)
+        PageHeader("Tentang Valoid Hub", onBack)
         LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     ValoidLogo(112.dp)
-                    Text("VALOID", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                    Text("VALOID HUB", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
                     Text("Versi $version", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }

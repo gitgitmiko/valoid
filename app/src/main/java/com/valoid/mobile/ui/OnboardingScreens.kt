@@ -75,7 +75,7 @@ fun SplashScreen() {
         Spacer(Modifier.weight(1f))
         ValoidLogo(132.dp)
         Spacer(Modifier.weight(1f))
-        Text("VALOID", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text("VALOID HUB", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary, strokeWidth = 3.dp, modifier = Modifier.padding(top = 28.dp).size(32.dp))
         Text("Memuat", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), modifier = Modifier.padding(top = 12.dp, bottom = 48.dp))
     }

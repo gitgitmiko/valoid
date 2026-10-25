@@ -58,7 +58,7 @@ fun AuthScreen(vm: AuthViewModel) {
     ) {
         ValoidLogo(96.dp)
         Text(
-            "VALOID",
+            "VALOID HUB",
             style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 12.dp),

@@ -39,7 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Home
+
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -68,12 +69,16 @@ import com.valoid.mobile.notify.StoreNotifications
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     SHOP("Toko", Icons.Filled.ShoppingCart),
-    PROFILE("Profil", Icons.Filled.Person),
+    HUB("Hub", Icons.Filled.Home),
     SETTINGS("Pengaturan", Icons.Filled.Settings),
 }
 
 @Composable
-fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewModel()) {
+fun ValoidApp(
+    authVm: AuthViewModel = viewModel(),
+    shopVm: ShopViewModel = viewModel(),
+    hubVm: HubViewModel = viewModel(),
+) {
     val context = LocalContext.current
     val user by authVm.user.collectAsStateWithLifecycle()
     val shop by shopVm.state.collectAsStateWithLifecycle()
@@ -92,6 +97,9 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val riotAccounts by shopVm.accounts.collectAsStateWithLifecycle()
     val activeAccountId by shopVm.activeAccountId.collectAsStateWithLifecycle()
     val deleteState by authVm.deleteState.collectAsStateWithLifecycle()
+    val announcements by hubVm.announcements.collectAsStateWithLifecycle()
+    var showProfile by rememberSaveable { mutableStateOf(false) }
+    var showAnnouncements by rememberSaveable { mutableStateOf(false) }
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
@@ -280,6 +288,30 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
         return
     }
 
+    if (showAnnouncements) {
+        AnnouncementsScreen(announcements, onBack = { showAnnouncements = false })
+        return
+    }
+    if (showProfile) {
+        SubPage("Profil", onBack = { showProfile = false }) {
+            if (shop.connected) {
+                ProfileScreen(
+                    profile = shop.profile,
+                    loading = shop.profileLoading,
+                    error = shop.profileError,
+                    onRefresh = shopVm::loadProfile,
+                    onOpenMatches = { showMatches = true },
+                    onOpenContracts = { showContracts = true },
+                    onOpenLoadout = { showLoadout = true },
+                    onOpenCareer = { showCareer = true },
+                )
+            } else {
+                ConnectRiotPrompt(state = shop, onConnect = { showRiotLogin = true }, onRetry = { shopVm.retryConnect(uid) })
+            }
+        }
+        return
+    }
+
     val nightAvailable = front?.nightMarket?.isNotEmpty() == true
     // Pengguna gratis membuka toko harian dengan iklan untuk satu sesi (1 jam, selama rotasi yang sama).
     val dailyRotation = front?.rotationDate
@@ -363,20 +395,16 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                         debugPro = it
                     },
                 )
+                tab == Tab.HUB -> HubScreen(
+                    profile = shop.profile,
+                    announcements = announcements,
+                    onOpenProfile = { showProfile = true },
+                    onOpenAnnouncements = { showAnnouncements = true },
+                )
                 !shop.connected -> ConnectRiotPrompt(
                     state = shop,
                     onConnect = { showRiotLogin = true },
                     onRetry = { shopVm.retryConnect(uid) },
-                )
-                tab == Tab.PROFILE -> ProfileScreen(
-                    profile = shop.profile,
-                    loading = shop.profileLoading,
-                    error = shop.profileError,
-                    onRefresh = shopVm::loadProfile,
-                    onOpenMatches = { showMatches = true },
-                    onOpenContracts = { showContracts = true },
-                    onOpenLoadout = { showLoadout = true },
-                    onOpenCareer = { showCareer = true },
                 )
                 else -> OfferListScreen(
                     title = "Toko harian",
