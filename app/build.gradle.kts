@@ -16,11 +16,11 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 38
+        versionCode = 39
         // Build debug memakai ID uji resmi Google agar pengujian tidak menghasilkan klik tidak valid.
         manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
-        versionName = "0.20.0"
+        versionName = "0.21.0"
     }
 
     // Kunci upload Play: keystore.properties (tidak di-commit) berisi storeFile, storePassword, keyAlias, keyPassword.

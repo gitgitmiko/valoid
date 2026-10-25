@@ -55,6 +55,9 @@ fun HubScreen(
     onOpenAnnouncements: () -> Unit,
     onlineCount: Int?,
     onOpenGlobal: () -> Unit,
+    rankRoomTitle: String?,
+    rankRoomOnline: Int?,
+    onOpenRankRoom: () -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -81,10 +84,12 @@ fun HubScreen(
         item {
             val rank = profile?.currentRank
             RoomCard(
-                title = "Room rank",
+                title = rankRoomTitle?.let { "Room $it" } ?: "Room rank",
                 subtitle = rank?.let { "Cari duo atau trio se-rank ${it.tierName.lowercase().replaceFirstChar { c -> c.uppercase() }}." }
                     ?: "Cari duo atau trio dengan rank yang sejajar.",
                 iconUrl = rank?.iconUrl,
+                online = rankRoomOnline,
+                onClick = onOpenRankRoom,
             )
         }
     }

@@ -47,13 +47,34 @@ service cloud.firestore {
       return /databases/$(database)/documents/chatUsers/$(request.auth.uid);
     }
 
+    // Kelompok rank; harus sama dengan RankRooms di aplikasi.
+    function rankGroup(t) {
+      return t < 3 ? 'unranked'
+        : t <= 8 ? 'iron-bronze'
+        : t <= 14 ? 'silver-gold'
+        : t <= 20 ? 'plat-diamond'
+        : 'ascendant-plus';
+    }
+
+    function validParty(p) {
+      return p is map && p.keys().hasOnly(['size', 'mode', 'need', 'note'])
+        && p.size in [2, 3, 5]
+        && p.mode in ['competitive', 'unrated', 'swiftplay', 'premier', 'custom']
+        && p.need is int && p.need >= 1 && p.need < p.size
+        && p.note is string && p.note.size() <= 120;
+    }
+
     // Pesan room: hanya dibuat oleh pengirimnya, dengan identitas sama seperti chatUsers,
-    // paling cepat satu pesan per 3 detik. Tidak bisa diubah atau dihapus pengguna.
+    // paling cepat satu pesan per 3 detik. Room rank hanya untuk wilayah dan kelompok rank pengirim.
+    // Tidak bisa diubah atau dihapus pengguna.
     match /rooms/{room}/messages/{id} {
       allow read: if signedIn();
       allow create: if signedIn()
         && room.matches('^[a-z0-9-]{1,40}$')
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'tag', 'tierName', 'rankIcon', 'cardArt', 'region', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'tag', 'tierName', 'rankIcon', 'cardArt', 'region', 'text', 'createdAt', 'party'])
+        && (!('party' in request.resource.data) || validParty(request.resource.data.party))
+        && (room == 'global'
+            || room == getAfter(chatUser()).data.region + '-' + rankGroup(getAfter(chatUser()).data.tier))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500

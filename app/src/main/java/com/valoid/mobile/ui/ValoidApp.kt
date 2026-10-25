@@ -65,6 +65,8 @@ import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.ads.StoreUnlock
 import com.valoid.mobile.billing.ProManager
 import com.valoid.mobile.data.ChatIdentity
+import com.valoid.mobile.data.RankRooms
+import kotlinx.coroutines.flow.flowOf
 import com.valoid.mobile.data.DemoMode
 import com.valoid.mobile.data.Presence
 import com.valoid.mobile.data.SkinOffer
@@ -316,15 +318,18 @@ fun ValoidApp(
             region = shop.region.shard,
         )
     }
+    val rankRoom = chatIdentity?.let { RankRooms.forIdentity(it) }
+    val rankRoomOnline by remember(rankRoom?.id) { rankRoom?.let { chatVm.roomCount(it.id) } ?: flowOf(null) }
+        .collectAsStateWithLifecycle(null)
     chatRoom?.let { room ->
         ChatRoomScreen(
-            title = if (room == ROOM_GLOBAL) "Room semua user" else room,
+            title = if (room == ROOM_GLOBAL) "Room semua user" else "Room ${rankRoom?.title ?: room}",
             online = roomOnline,
             messages = chatMessages,
             myUid = uid,
             sending = chatState.sending,
             error = chatState.error,
-            onSend = { text, onSent -> chatIdentity?.let { chatVm.send(it, text, onSent) } },
+            onSend = { text, party, onSent -> chatIdentity?.let { chatVm.send(it, text, party, onSent) } },
             onBack = { chatVm.closeRoom(uid) },
         )
         return
@@ -446,6 +451,15 @@ fun ValoidApp(
                     onOpenGlobal = {
                         when {
                             chatIdentity != null -> chatVm.openRoom(ROOM_GLOBAL, uid)
+                            shop.connected -> shopVm.loadProfile()
+                            else -> showProfile = true
+                        }
+                    },
+                    rankRoomTitle = rankRoom?.title,
+                    rankRoomOnline = rankRoomOnline,
+                    onOpenRankRoom = {
+                        when {
+                            rankRoom != null -> chatVm.openRoom(rankRoom.id, uid)
                             shop.connected -> shopVm.loadProfile()
                             else -> showProfile = true
                         }

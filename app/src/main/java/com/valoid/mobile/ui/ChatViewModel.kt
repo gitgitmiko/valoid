@@ -6,8 +6,10 @@ import com.valoid.mobile.data.ChatException
 import com.valoid.mobile.data.ChatIdentity
 import com.valoid.mobile.data.ChatMessage
 import com.valoid.mobile.data.ChatRepository
+import com.valoid.mobile.data.PartyPost
 import com.valoid.mobile.data.Presence
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,15 +55,17 @@ class ChatViewModel(private val repo: ChatRepository = ChatRepository()) : ViewM
         _state.value = ChatUiState()
     }
 
-    /** Mengirim [text]; mengembalikan lewat [onSent] agar kolom input bisa dikosongkan. */
-    fun send(identity: ChatIdentity, text: String, onSent: () -> Unit) {
+    fun roomCount(room: String): Flow<Int?> = Presence.roomCount(room).catch { }
+
+    /** Mengirim [text] (dan [party] bila ajakan party); [onSent] dipanggil agar kolom input bisa dikosongkan. */
+    fun send(identity: ChatIdentity, text: String, party: PartyPost? = null, onSent: () -> Unit) {
         val room = _room.value ?: return
         val clean = text.trim().take(MAX_MESSAGE)
         if (clean.isEmpty() || _state.value.sending) return
         _state.value = ChatUiState(sending = true)
         viewModelScope.launch {
             try {
-                repo.send(room, identity, clean)
+                repo.send(room, identity, clean, party)
                 _state.value = ChatUiState()
                 onSent()
             } catch (e: ChatException) {

@@ -27,6 +27,41 @@ data class ChatIdentity(
     val region: String,
 )
 
+/** Room rank: per wilayah dan kelompok rank, karena Riot membatasi party lintas wilayah dan selisih rank. */
+data class RankRoom(val id: String, val title: String)
+
+object RankRooms {
+    fun groupOf(tier: Int): Pair<String, String> = when {
+        tier < 3 -> "unranked" to "Unranked"
+        tier <= 8 -> "iron-bronze" to "Iron–Bronze"
+        tier <= 14 -> "silver-gold" to "Silver–Gold"
+        tier <= 20 -> "plat-diamond" to "Platinum–Diamond"
+        else -> "ascendant-plus" to "Ascendant+"
+    }
+
+    fun forIdentity(identity: ChatIdentity): RankRoom {
+        val (group, label) = groupOf(identity.tier)
+        return RankRoom("${identity.region}-$group", "${identity.region.uppercase()} · $label")
+    }
+}
+
+enum class PartySize(val players: Int, val label: String) {
+    DUO(2, "Duo"),
+    TRIO(3, "Trio"),
+    FIVE(5, "Full 5"),
+}
+
+enum class PartyMode(val id: String, val label: String) {
+    COMPETITIVE("competitive", "Kompetitif"),
+    UNRATED("unrated", "Unrated"),
+    SWIFTPLAY("swiftplay", "Swiftplay"),
+    PREMIER("premier", "Premier"),
+    CUSTOM("custom", "Custom / scrim"),
+}
+
+/** Ajakan party di room: mencari [need] pemain lagi untuk party [size]. */
+data class PartyPost(val size: PartySize, val mode: PartyMode, val need: Int, val note: String)
+
 data class ChatMessage(
     val id: String,
     val uid: String,
@@ -38,6 +73,7 @@ data class ChatMessage(
     val region: String?,
     val text: String,
     val createdAtMillis: Long,
+    val party: PartyPost? = null,
 ) {
     val riotId: String get() = "$name#$tag"
 }
@@ -74,6 +110,7 @@ class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
                             text = doc.getString("text") ?: return@mapNotNull null,
                             // Pesan sendiri yang belum dikonfirmasi server belum punya waktu.
                             createdAtMillis = doc.getTimestamp("createdAt")?.toDate()?.time ?: System.currentTimeMillis(),
+                            party = (doc.get("party") as? Map<*, *>)?.let(::parseParty),
                         )
                     },
                 )
@@ -81,7 +118,13 @@ class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
         awaitClose { registration.remove() }
     }
 
-    suspend fun send(room: String, identity: ChatIdentity, text: String) {
+    private fun parseParty(m: Map<*, *>): PartyPost? {
+        val size = PartySize.entries.firstOrNull { it.players == (m["size"] as? Number)?.toInt() } ?: return null
+        val mode = PartyMode.entries.firstOrNull { it.id == m["mode"] } ?: return null
+        return PartyPost(size, mode, (m["need"] as? Number)?.toInt() ?: 1, m["note"] as? String ?: "")
+    }
+
+    suspend fun send(room: String, identity: ChatIdentity, text: String, party: PartyPost? = null) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: throw ChatException("Belum masuk")
         val profile = mapOf(
             "name" to identity.name,
@@ -96,7 +139,7 @@ class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
             "uid" to uid,
             "text" to text,
             "createdAt" to FieldValue.serverTimestamp(),
-        )
+        ) + (party?.let { mapOf("party" to mapOf("size" to it.size.players, "mode" to it.mode.id, "need" to it.need, "note" to it.note)) } ?: emptyMap())
         try {
             db.batch()
                 .set(db.collection("chatUsers").document(uid), profile + ("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
