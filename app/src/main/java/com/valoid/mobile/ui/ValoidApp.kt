@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.valoid.mobile.BuildConfig
+import com.valoid.mobile.R
 import com.valoid.mobile.ads.AdsManager
 import com.valoid.mobile.ads.StoreUnlock
 import com.valoid.mobile.billing.ProManager
@@ -89,6 +90,7 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
     val isPro by ProManager.isPro.collectAsStateWithLifecycle()
     val riotAccounts by shopVm.accounts.collectAsStateWithLifecycle()
     val activeAccountId by shopVm.activeAccountId.collectAsStateWithLifecycle()
+    val deleteState by authVm.deleteState.collectAsStateWithLifecycle()
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
@@ -330,6 +332,22 @@ fun ValoidApp(authVm: AuthViewModel = viewModel(), shopVm: ShopViewModel = viewM
                     onSignOut = {
                         shopVm.onSignOut()
                         authVm.signOut()
+                    },
+                    deleteUsesPassword = authVm.usesPassword,
+                    deleteRunning = deleteState.running,
+                    deleteError = deleteState.error,
+                    onDeleteAccount = { password ->
+                        authVm.deleteAccount(
+                            activityContext = context,
+                            webClientId = context.getString(R.string.default_web_client_id),
+                            password = password,
+                            knownPuuids = riotAccounts.map { it.puuid },
+                        ) {
+                            // Akun sudah terhapus di server; bersihkan sisa di HP lalu kembali ke layar masuk.
+                            shopVm.onSignOut()
+                            AppLock.setEnabled(context, false)
+                            authVm.signOut()
+                        }
                     },
                     onOpenFaq = { showFaq = true },
                     onOpenAbout = { showAbout = true },

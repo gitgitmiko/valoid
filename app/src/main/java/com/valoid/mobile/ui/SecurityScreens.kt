@@ -28,7 +28,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
 /** Menutupi seluruh aplikasi sampai pengguna lolos autentikasi. */
@@ -89,8 +92,13 @@ fun SettingsTab(
     activeAccountId: String? = null,
     onSwitchAccount: (String) -> Unit = {},
     onRemoveAccount: (String) -> Unit = {},
+    deleteUsesPassword: Boolean = false,
+    deleteRunning: Boolean = false,
+    deleteError: String? = null,
+    onDeleteAccount: (password: String?) -> Unit = {},
 ) {
     var confirmRemove by remember { mutableStateOf<RiotAccount?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Text(
@@ -121,6 +129,9 @@ fun SettingsTab(
             SettingsCard("Akun Valoid") {
                 Text(email ?: "-")
                 OutlinedButton(onClick = onSignOut) { Text("Keluar dari Valoid") }
+                TextButton(onClick = { confirmDelete = true }) {
+                    Text("Hapus akun", color = MaterialTheme.colorScheme.error)
+                }
             }
 
             SettingsCard("Akun Riot") {
@@ -209,6 +220,61 @@ fun SettingsTab(
             dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Batal") } },
         )
     }
+
+    if (confirmDelete) {
+        DeleteAccountDialog(
+            usesPassword = deleteUsesPassword,
+            running = deleteRunning,
+            error = deleteError,
+            onConfirm = onDeleteAccount,
+            onDismiss = { confirmDelete = false },
+        )
+    }
+}
+
+@Composable
+private fun DeleteAccountDialog(
+    usesPassword: Boolean,
+    running: Boolean,
+    error: String?,
+    onConfirm: (password: String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!running) onDismiss() },
+        title = { Text("Hapus akun Valoid?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Akun Valoid, skin favorit, dan riwayat toko semua akun Riot dihapus permanen, lalu sesi Riot di HP ini ikut dihapus.")
+                Text(
+                    "Langganan Valoid Pro tidak otomatis berhenti; batalkan di Google Play > Pembayaran & langganan.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (usesPassword) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password untuk verifikasi") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        enabled = !running,
+                    )
+                } else {
+                    Text("Kamu akan diminta memilih akun Google untuk verifikasi.", style = MaterialTheme.typography.bodySmall)
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (running) CircularProgressIndicator(Modifier.size(24.dp))
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(if (usesPassword) password else null) },
+                enabled = !running && (!usesPassword || password.isNotEmpty()),
+            ) { Text("Hapus permanen", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !running) { Text("Batal") } },
+    )
 }
 
 @Composable

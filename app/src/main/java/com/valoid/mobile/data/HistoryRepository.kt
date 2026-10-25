@@ -14,17 +14,22 @@ class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
     private fun legacy(uid: String) =
         db.collection("users").document(uid).collection("shopHistory")
 
+    private fun accounts(uid: String) = db.collection("users").document(uid).collection("accounts")
+
     private fun collection(uid: String, puuid: String) =
-        db.collection("users").document(uid).collection("accounts").document(puuid.lowercase()).collection("shopHistory")
+        accounts(uid).document(puuid.lowercase()).collection("shopHistory")
 
     /**
      * Mencatat toko harian untuk rotasi [date] sekali saja; riwayat tidak bisa diubah setelah dibuat.
      * Mengembalikan true bila rotasi baru tercatat.
      */
     suspend fun saveDay(uid: String, puuid: String, date: String, offers: List<SkinOffer>): Boolean {
-        val dayRef = collection(uid, puuid).document(date)
+        val accountRef = accounts(uid).document(puuid.lowercase())
+        val dayRef = accountRef.collection("shopHistory").document(date)
         return db.runTransaction { tx ->
             if (tx.get(dayRef).exists()) return@runTransaction false
+            // Penanda akun agar riwayatnya bisa ditemukan saat akun Valoid dihapus (klien tidak bisa mendaftar subkoleksi).
+            if (!tx.get(accountRef).exists()) tx.set(accountRef, mapOf("puuid" to puuid.lowercase()))
             tx.set(
                 dayRef,
                 mapOf(
@@ -44,6 +49,23 @@ class HistoryRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
         val current = read(collection(uid, puuid), limit)
         val old = if (includeLegacy) runCatching { read(legacy(uid), limit) }.getOrDefault(emptyList()) else emptyList()
         return (current + old).distinctBy { it.date }.sortedByDescending { it.date }.take(limit.toInt())
+    }
+
+    /** Menghapus semua riwayat pengguna: akun bertanda di server, [knownPuuids] dari perangkat, dan riwayat versi lama. */
+    suspend fun deleteAll(uid: String, knownPuuids: Collection<String>) {
+        val markers = accounts(uid).get().await().documents
+        val puuids = markers.map { it.id } + knownPuuids.map { it.lowercase() }
+        puuids.distinct().forEach { deleteCollection(collection(uid, it)) }
+        deleteCollection(legacy(uid))
+        markers.forEach { it.reference.delete().await() }
+    }
+
+    private suspend fun deleteCollection(ref: com.google.firebase.firestore.CollectionReference) {
+        while (true) {
+            val page = ref.limit(400).get().await().documents
+            if (page.isEmpty()) return
+            db.batch().apply { page.forEach { delete(it.reference) } }.commit().await()
+        }
     }
 
     private suspend fun read(ref: com.google.firebase.firestore.CollectionReference, limit: Long): List<HistoryDay> {

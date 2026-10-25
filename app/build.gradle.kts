@@ -14,13 +14,13 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 35
-        versionCode = 33
+        versionCode = 34
         // ID AdMob: isi admobAppId/admobRewardedId di gradle.properties. Bawaannya ID uji resmi Google.
         val admobAppId = (project.findProperty("admobAppId") as String?) ?: "ca-app-pub-3940256099942544~3347511713"
         val admobRewardedId = (project.findProperty("admobRewardedId") as String?) ?: "ca-app-pub-3940256099942544/5224354917"
         manifestPlaceholders["admobAppId"] = admobAppId
         buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
-        versionName = "0.16.4"
+        versionName = "0.17.0"
     }
 
     buildTypes {

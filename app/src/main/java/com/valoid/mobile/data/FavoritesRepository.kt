@@ -35,4 +35,11 @@ class FavoritesRepository(private val db: FirebaseFirestore = FirebaseFirestore.
 
     private fun DocumentSnapshot.toFavorite() =
         getString("name")?.let { FavoriteSkin(id, it, getString("iconUrl")) }
+
+    suspend fun deleteAll(uid: String) {
+        val docs = collection(uid).get().await().documents
+        docs.chunked(400).forEach { page ->
+            db.batch().apply { page.forEach { delete(it.reference) } }.commit().await()
+        }
+    }
 }

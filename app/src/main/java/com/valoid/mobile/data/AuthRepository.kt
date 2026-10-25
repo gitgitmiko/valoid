@@ -6,6 +6,8 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.AuthCredential
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -36,7 +38,30 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
         auth.sendPasswordResetEmail(email.trim()).await()
     }
 
+    /** True bila akun masuk dengan email dan password (verifikasi ulang memakai password, bukan Google). */
+    val usesPassword: Boolean
+        get() = auth.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
+
     suspend fun signInWithGoogle(activityContext: Context, webClientId: String) {
+        auth.signInWithCredential(googleCredential(activityContext, webClientId)).await()
+    }
+
+    /** Verifikasi ulang sebelum operasi sensitif; Firebase menolak hapus akun jika login sudah lama. */
+    suspend fun reauthenticate(activityContext: Context, webClientId: String, password: String?) {
+        val user = auth.currentUser ?: error("Belum masuk")
+        val credential = if (usesPassword) {
+            EmailAuthProvider.getCredential(user.email.orEmpty(), password.orEmpty())
+        } else {
+            googleCredential(activityContext, webClientId)
+        }
+        user.reauthenticate(credential).await()
+    }
+
+    suspend fun deleteUser() {
+        auth.currentUser?.delete()?.await()
+    }
+
+    private suspend fun googleCredential(activityContext: Context, webClientId: String): AuthCredential {
         val option = GetGoogleIdOption.Builder()
             .setServerClientId(webClientId)
             .setFilterByAuthorizedAccounts(false)
@@ -51,7 +76,7 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
             error("Kredensial Google tidak dikenali")
         }
         val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-        auth.signInWithCredential(GoogleAuthProvider.getCredential(idToken, null)).await()
+        return GoogleAuthProvider.getCredential(idToken, null)
     }
 
     fun signOut() = auth.signOut()
