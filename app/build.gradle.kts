@@ -16,13 +16,11 @@ android {
         applicationId = "com.valoid.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 34
-        // ID AdMob: isi admobAppId/admobRewardedId di gradle.properties. Bawaannya ID uji resmi Google.
-        val admobAppId = (project.findProperty("admobAppId") as String?) ?: "ca-app-pub-3940256099942544~3347511713"
-        val admobRewardedId = (project.findProperty("admobRewardedId") as String?) ?: "ca-app-pub-3940256099942544/5224354917"
-        manifestPlaceholders["admobAppId"] = admobAppId
-        buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobRewardedId\"")
-        versionName = "0.17.0"
+        versionCode = 35
+        // Build debug memakai ID uji resmi Google agar pengujian tidak menghasilkan klik tidak valid.
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+        buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
+        versionName = "0.17.1"
     }
 
     // Kunci upload Play: keystore.properties (tidak di-commit) berisi storeFile, storePassword, keyAlias, keyPassword.
@@ -42,6 +40,8 @@ android {
     buildTypes {
         release {
             signingConfig = uploadSigning
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-6808667639334235~5006776409"
+            buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-6808667639334235/4488523774\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

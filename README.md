@@ -22,7 +22,7 @@ Fitur: login Google, login email/password dengan reset password, toko harian, Ni
 
 1. Simpan `keystore.properties` (tidak di-commit) di root proyek:
    `storeFile`, `storePassword`, `keyAlias`, `keyPassword` untuk kunci upload.
-2. Isi `admobAppId` dan `admobRewardedId` di `~/.gradle/gradle.properties` (bawaan: ID uji Google).
+2. ID AdMob asli ada di build type `release`; build debug memakai ID uji Google.
 3. `gradle :app:bundleRelease` → `app/build/outputs/bundle/release/app-release.aab`.
 4. Setelah Play App Signing aktif, tambahkan SHA-1/SHA-256 kunci penandatanganan aplikasi dari Play Console ke app Firebase agar login Google berfungsi.
 
