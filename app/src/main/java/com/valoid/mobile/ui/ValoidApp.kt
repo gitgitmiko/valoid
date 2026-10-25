@@ -376,6 +376,7 @@ fun ValoidApp(
             onNoticeShown = chatVm::clearNotice,
             onReport = chatVm::report,
             onBlock = chatVm::block,
+            onDeleteOwn = chatVm::deleteOwn,
             onAdminDelete = { chatVm.deleteMessage(room, it.id) },
             onAdminBan = { chatVm.ban(it.uid, it.riotId, "Dari chat") },
         )

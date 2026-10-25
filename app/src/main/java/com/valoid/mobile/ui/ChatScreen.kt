@@ -90,6 +90,7 @@ fun ChatRoomScreen(
     onNoticeShown: () -> Unit = {},
     onReport: (ChatMessage, ReportReason, String) -> Unit = { _, _, _ -> },
     onBlock: (ChatMessage) -> Unit = {},
+    onDeleteOwn: (ChatMessage) -> Unit = {},
     onAdminDelete: (ChatMessage) -> Unit = {},
     onAdminBan: (ChatMessage) -> Unit = {},
 ) {
@@ -183,6 +184,12 @@ fun ChatRoomScreen(
                         close()
                         clipboard.setText(AnnotatedString(m.riotId))
                         Toast.makeText(context, "Riot ID ${m.riotId} disalin", Toast.LENGTH_SHORT).show()
+                    }
+                    if (mine && !isAdmin) {
+                        ActionItem("Hapus pesan", danger = true) {
+                            close()
+                            confirm = "Hapus pesanmu ini?" to { onDeleteOwn(m) }
+                        }
                     }
                     if (!mine) {
                         ActionItem("Laporkan pesan") { close(); reportFor = m }

@@ -97,6 +97,11 @@ class ChatViewModel(
 
     fun unblock(user: BlockedUser) = act("Blokir ${user.name} dibuka.") { moderation.unblock(user.uid) }
 
+    fun deleteOwn(message: ChatMessage) {
+        val room = _room.value ?: return
+        act("Pesan dihapus.") { repo.deleteOwn(room, message.id) }
+    }
+
     fun deleteMessage(room: String, messageId: String) = act("Pesan dihapus.") { moderation.deleteMessage(room, messageId) }
 
     fun dismissReports(ids: List<String>) = act("Laporan diabaikan.") { moderation.dismissReports(ids) }

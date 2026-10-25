@@ -41,6 +41,9 @@ object RankRooms {
 
     private val groups = listOf("unranked", "iron-bronze", "silver-gold", "plat-diamond", "ascendant-plus")
 
+    /** Semua room yang ada: global dan room rank tiap wilayah. */
+    val allRoomIds: List<String> = listOf("global") + RiotRegion.entries.flatMap { r -> groups.map { "${r.shard}-$it" } }
+
     /** Nama room untuk tampilan: "global" -> "Room semua user", "ap-plat-diamond" -> "Asia Pasifik · Platinum–Diamond". */
     fun titleOf(roomId: String): String {
         if (roomId == "global") return "Room semua user"
@@ -126,6 +129,23 @@ class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
                 )
             }
         awaitClose { registration.remove() }
+    }
+
+    suspend fun deleteOwn(room: String, messageId: String) {
+        db.collection("rooms").document(room).collection("messages").document(messageId).delete().await()
+    }
+
+    /** Menghapus semua pesan, profil chat, dan daftar blokir milik [uid] (dipakai saat hapus akun). */
+    suspend fun deleteAllFor(uid: String) {
+        RankRooms.allRoomIds.forEach { room ->
+            val mine = db.collection("rooms").document(room).collection("messages").whereEqualTo("uid", uid).get().await().documents
+            mine.chunked(400).forEach { page -> db.batch().apply { page.forEach { delete(it.reference) } }.commit().await() }
+        }
+        val blocked = db.collection("users").document(uid).collection("blocked").get().await().documents
+        db.batch().apply {
+            blocked.forEach { delete(it.reference) }
+            delete(db.collection("chatUsers").document(uid))
+        }.commit().await()
     }
 
     private fun parseParty(m: Map<*, *>): PartyPost? {

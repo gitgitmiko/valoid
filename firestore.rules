@@ -41,6 +41,7 @@ service cloud.firestore {
     match /chatUsers/{uid} {
       allow read: if signedIn();
       allow create, update: if owner(uid) && validChatUser();
+      allow delete: if owner(uid);
     }
 
     function chatUser() {
@@ -103,7 +104,7 @@ service cloud.firestore {
     // Tidak bisa diubah atau dihapus pengguna.
     match /rooms/{room}/messages/{id} {
       allow read: if signedIn();
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if signedIn()
         && !exists(/databases/$(database)/documents/bans/$(request.auth.uid))
         && room.matches('^[a-z0-9-]{1,40}$')

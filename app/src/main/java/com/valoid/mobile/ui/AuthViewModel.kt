@@ -7,6 +7,8 @@ import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.valoid.mobile.data.AuthRepository
+import com.valoid.mobile.data.ChatRepository
+import com.valoid.mobile.data.Presence
 import com.valoid.mobile.data.FavoritesRepository
 import com.valoid.mobile.data.HistoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +85,8 @@ class AuthViewModel(
                 repo.reauthenticate(activityContext, webClientId, password)
                 favorites.deleteAll(uid)
                 history.deleteAll(uid, knownPuuids)
+                ChatRepository().deleteAllFor(uid)
+                Presence.goOffline(uid)
                 repo.deleteUser()
                 _deleteState.value = DeleteAccountState()
                 onDeleted()

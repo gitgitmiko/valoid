@@ -139,6 +139,7 @@ fun AboutScreen(onBack: () -> Unit) {
             item {
                 Column {
                     TextButton(onClick = { uriHandler.openUri(PRIVACY_URL) }) { Text("Kebijakan privasi") }
+                    TextButton(onClick = { uriHandler.openUri(RULES_URL) }) { Text("Aturan komunitas") }
                     TextButton(onClick = { uriHandler.openUri(DELETE_ACCOUNT_URL) }) { Text("Hapus akun dan data") }
                     TextButton(onClick = { uriHandler.openUri("mailto:$SUPPORT_EMAIL") }) { Text("Kontak: $SUPPORT_EMAIL") }
                 }
@@ -159,5 +160,6 @@ fun AboutScreen(onBack: () -> Unit) {
 }
 
 private const val PRIVACY_URL = "https://gitgitdev.my.id/valoid/privacy/"
+private const val RULES_URL = "https://gitgitdev.my.id/valoid/aturan-komunitas/"
 private const val DELETE_ACCOUNT_URL = "https://gitgitdev.my.id/valoid/hapus-akun/"
 private const val SUPPORT_EMAIL = "support@gitgitdev.my.id"
