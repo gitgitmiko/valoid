@@ -33,21 +33,24 @@ import com.valoid.mobile.data.RiotAuth
 
 /**
  * Di sebagian versi WebView form login tidak tergambar: pada versi lama gambar latar menutupi kartu,
- * pada versi baru pembungkus kartu setinggi 0 memotong isinya. Kartu yang berisi kolom username
- * diangkat ke lapisannya sendiri, pembungkusnya dibuka, dan latar disembunyikan bila tidak
- * membungkus kartu. Dijalankan ulang setiap kali halaman (SPA) merender ulang.
+ * pada versi baru pembungkus kartu setinggi 0 memotong isinya. Kartu yang berisi kolom isian
+ * (username/password, atau kode 2FA) diangkat ke lapisannya sendiri, pembungkusnya dibuka, dan latar
+ * disembunyikan bila tidak membungkus kartu; latar yang ternyata membungkus kartu baru (misalnya kartu
+ * 2FA setelah password) ditampilkan lagi. Dijalankan ulang setiap kali halaman (SPA) merender ulang.
  */
 private const val FIX_LAYOUT =
     "(function(){if(window.__valoidFix)return;window.__valoidFix=true;" +
         "function set(e,k,v){if(e.style.getPropertyValue(k)!==v||e.style.getPropertyPriority(k)!=='important')" +
         "e.style.setProperty(k,v,'important');}" +
-        "function fix(){var u=document.querySelector('input[name=username],input[type=password]');if(!u)return;" +
+        "function fix(){var u=document.querySelector('input[name=username],input[type=password]," +
+        "input[autocomplete=one-time-code],input[inputmode=numeric],form input:not([type=hidden])');if(!u)return;" +
         "var card=u.closest('[class*=main-background]')||u.closest('form')||u.parentElement;" +
         "set(card,'position','relative');set(card,'z-index','10');set(card,'will-change','transform');" +
         "for(var e=card.parentElement;e;e=e.parentElement){set(e,'overflow','visible');set(e,'contain','none');" +
         "set(e,'content-visibility','visible');set(e,'clip-path','none');}" +
         "document.querySelectorAll('[class*=page-background]').forEach(function(e){" +
-        "if(!e.contains(card))set(e,'display','none');});}" +
+        "if(!e.contains(card))set(e,'display','none');" +
+        "else if(e.style.getPropertyValue('display')==='none')e.style.removeProperty('display');});}" +
         "fix();new MutationObserver(fix).observe(document.documentElement,{childList:true,subtree:true});})();"
 
 private const val DISMISS_COOKIE_BANNER =
