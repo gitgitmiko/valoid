@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 object ProManager : PurchasesUpdatedListener {
     const val PRODUCT_ID = "valoid_pro"
-    const val FALLBACK_PRICE = "Rp19.000"
+    const val FALLBACK_PRICE = "Rp29.000"
 
     private const val PREFS = "pro"
     private const val KEY_ACTIVE = "active"
@@ -37,7 +37,7 @@ object ProManager : PurchasesUpdatedListener {
     private val _isPro = MutableStateFlow(false)
     val isPro: StateFlow<Boolean> = _isPro
 
-    /** Harga dari Google Play bila produk tersedia, misalnya "Rp19.000". */
+    /** Harga dari Google Play bila produk tersedia, misalnya "Rp29.000". */
     private val _price = MutableStateFlow<String?>(null)
     val price: StateFlow<String?> = _price
 
