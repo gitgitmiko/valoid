@@ -68,6 +68,7 @@ import com.valoid.mobile.data.ChatIdentity
 import com.valoid.mobile.data.RankRooms
 import kotlinx.coroutines.flow.flowOf
 import com.valoid.mobile.data.DemoMode
+import com.valoid.mobile.data.ProGrants
 import com.valoid.mobile.data.Presence
 import com.valoid.mobile.data.SkinOffer
 import com.valoid.mobile.notify.StoreNotifications
@@ -137,6 +138,10 @@ fun ValoidApp(
 
     val demo = DemoMode.isDemo(user?.email)
     LaunchedEffect(demo) { ProManager.setDemo(demo) }
+    LaunchedEffect(user?.uid) {
+        val id = user?.uid
+        if (id == null) ProManager.setGranted(false) else ProGrants.isGranted(id).collect { ProManager.setGranted(it) }
+    }
 
     val uid = user?.uid
     if (uid == null) {

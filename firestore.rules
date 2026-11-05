@@ -57,6 +57,11 @@ service cloud.firestore {
       allow read: if owner(uid);
     }
 
+    // Valoid Pro gratis dari developer; ditulis lewat tools/grant_pro.py, tidak bisa ditulis dari aplikasi.
+    match /proGrants/{uid} {
+      allow read: if owner(uid);
+    }
+
     // Ban dari chat; pengguna bisa membaca status ban-nya sendiri.
     match /bans/{uid} {
       allow read: if owner(uid) || isAdmin();

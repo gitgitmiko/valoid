@@ -28,6 +28,7 @@ object ProManager : PurchasesUpdatedListener {
     private const val PREFS = "pro"
     private const val KEY_ACTIVE = "active"
     private const val KEY_DEBUG = "debug_override"
+    private const val KEY_GRANT = "grant"
 
     private lateinit var appContext: Context
     private var client: BillingClient? = null
@@ -48,6 +49,7 @@ object ProManager : PurchasesUpdatedListener {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
         purchaseActive = prefs().getBoolean(KEY_ACTIVE, false)
+        granted = prefs().getBoolean(KEY_GRANT, false)
         publish()
         client = BillingClient.newBuilder(appContext)
             .setListener(this)
@@ -59,7 +61,7 @@ object ProManager : PurchasesUpdatedListener {
     /** Status Pro tersimpan, untuk komponen tanpa UI seperti worker. */
     fun isProCached(context: Context): Boolean {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return p.getBoolean(KEY_ACTIVE, false) || (BuildConfig.DEBUG && p.getBoolean(KEY_DEBUG, false))
+        return p.getBoolean(KEY_ACTIVE, false) || p.getBoolean(KEY_GRANT, false) || (BuildConfig.DEBUG && p.getBoolean(KEY_DEBUG, false))
     }
 
     val debugOverride: Boolean get() = BuildConfig.DEBUG && prefs().getBoolean(KEY_DEBUG, false)
@@ -166,8 +168,18 @@ object ProManager : PurchasesUpdatedListener {
         if (::appContext.isInitialized) publish()
     }
 
+    /** Pro gratis dari developer (proGrants/{uid}, hanya diisi lewat tools/grant_pro.py atau konsol). */
+    private var granted = false
+
+    fun setGranted(enabled: Boolean) {
+        granted = enabled
+        if (!::appContext.isInitialized) return
+        prefs().edit().putBoolean(KEY_GRANT, enabled).apply()
+        publish()
+    }
+
     private fun publish() {
-        _isPro.value = purchaseActive || debugOverride || demo
+        _isPro.value = purchaseActive || granted || debugOverride || demo
     }
 
     private fun prefs() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

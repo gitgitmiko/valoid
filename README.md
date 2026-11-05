@@ -28,6 +28,8 @@ Fitur: login Google, login email/password dengan reset password, toko harian, Ni
 
 Mode Demo untuk peninjau Play: akun `playreview@gitgitdev.my.id` (lihat `DemoMode.kt`) memakai data contoh dari `app/src/main/assets/demo/`. Jalankan `python3 tools/make_demo_data.py` sebelum rilis agar Battle Pass dan rank mengikuti act yang berjalan.
 
+Pro gratis per akun: `python3 tools/grant_pro.py <email> --note "..."` (cabut dengan `--revoke`, lihat daftar dengan `--list`). Data di Firestore `proGrants/{uid}`, hanya bisa ditulis lewat tool/konsol.
+
 Kebijakan privasi: https://gitgitdev.my.id/valoid/privacy/ · Hapus akun: https://gitgitdev.my.id/valoid/hapus-akun/
 
 ## Catatan
