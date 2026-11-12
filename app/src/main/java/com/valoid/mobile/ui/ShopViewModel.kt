@@ -187,8 +187,17 @@ class ShopViewModel(
         val account = RiotAccounts.active()
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            val cookies = account?.cookies ?: riot.legacyWebViewCookies()
-            val reauth = cookies?.let { runCatching { riot.reauthenticate(it) }.getOrNull() }
+            val reauth = try {
+                withNetworkRetry {
+                    if (account != null) riot.reauthenticateAccount(account.puuid)
+                    else riot.legacyWebViewCookies()?.let { riot.reauthenticate(it) }
+                }
+            } catch (e: Exception) {
+                // Bukan sesi berakhir: cookie tetap disimpan dan pengguna cukup mencoba lagi.
+                autoConnectTried = false
+                _state.update { it.copy(loading = false, error = "Tidak bisa menghubungi Riot. Periksa koneksi lalu coba lagi.") }
+                return@launch
+            }
             if (reauth != null) {
                 connect(reauth.tokens, reauth.cookies, uid)
                 if (account == null) RiotAuth.clear()
@@ -201,6 +210,20 @@ class ShopViewModel(
                 }
             }
         }
+    }
+
+    /** Mencoba ulang [block] dua kali bila gagal, misalnya karena jaringan belum siap saat aplikasi dibuka. */
+    private suspend fun <T> withNetworkRetry(block: suspend () -> T): T {
+        repeat(2) { attempt ->
+            try {
+                return block()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                kotlinx.coroutines.delay(1_500L * (attempt + 1))
+            }
+        }
+        return block()
     }
 
     private fun connectDemo(uid: String) {
@@ -280,7 +303,7 @@ class ShopViewModel(
             } catch (e: RiotException) {
                 if (e.sessionExpired) {
                     session = null
-                    val reauth = RiotAccounts.active()?.let { runCatching { riot.reauthenticate(it.cookies) }.getOrNull() }
+                    val reauth = RiotAccounts.active()?.let { a -> runCatching { withNetworkRetry { riot.reauthenticateAccount(a.puuid) } }.getOrNull() }
                     if (reauth != null) {
                         connect(reauth.tokens, reauth.cookies, uid)
                         return@launch

@@ -29,8 +29,12 @@ class StoreCheckWorker(context: Context, params: WorkerParameters) : CoroutineWo
         RiotAccounts.init(applicationContext)
         val account = RiotAccounts.active() ?: return Result.success()
         val riot = RiotRepository()
-        val reauth = runCatching { riot.reauthenticate(account.cookies) }.getOrNull() ?: return Result.success()
-        RiotAccounts.update(account.puuid) { it.copy(cookies = reauth.cookies) }
+        // Gangguan jaringan dicoba lagi nanti; null berarti sesi Riot benar-benar berakhir.
+        val reauth = try {
+            riot.reauthenticateAccount(account.puuid)
+        } catch (e: Exception) {
+            return Result.retry()
+        } ?: return Result.success()
         return try {
             val session = riot.createSession(reauth.tokens.accessToken, reauth.tokens.idToken, RiotRegion.AP)
             val front = riot.loadStorefront(session)

@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -43,16 +45,29 @@ class RiotRepository(
     /**
      * Meminta token baru memakai cookie sesi Riot [cookies]. Mengembalikan token beserta cookie yang
      * sudah diperbarui, atau null bila sesi tidak berlaku lagi (Riot mengarahkan ke halaman login).
+     * Gangguan jaringan atau server Riot dilempar sebagai exception agar tidak dikira sesi berakhir.
      */
     suspend fun reauthenticate(cookies: String): Reauth? {
         if (!cookies.contains("ssid=")) return null
-        val (setCookies, location) = withContext(Dispatchers.IO) {
+        val (code, setCookies, location) = withContext(Dispatchers.IO) {
             noRedirects.newCall(
                 Request.Builder().url(RiotAuth.AUTH_URL).header("Cookie", cookies).build(),
-            ).execute().use { it.headers("Set-Cookie") to it.header("Location") }
+            ).execute().use { Triple(it.code, it.headers("Set-Cookie"), it.header("Location")) }
         }
-        val tokens = RiotAuth.parseRedirect(location) ?: return null
-        return Reauth(tokens, RiotAuth.mergeCookies(cookies, setCookies))
+        val tokens = RiotAuth.parseRedirect(location)
+        if (tokens != null) return Reauth(tokens, RiotAuth.mergeCookies(cookies, setCookies))
+        if (code in 300..399) return null
+        throw RiotException("Server login Riot sedang bermasalah (HTTP $code), coba lagi sebentar")
+    }
+
+    /**
+     * Login ulang akun [puuid] memakai cookie terbarunya lalu menyimpan cookie yang diperbarui Riot.
+     * Dijalankan satu per satu agar worker latar belakang dan aplikasi tidak memakai cookie usang
+     * atau saling menimpa cookie hasil login ulang.
+     */
+    suspend fun reauthenticateAccount(puuid: String): Reauth? = reauthLock.withLock {
+        val account = RiotAccounts.accounts.value.firstOrNull { it.puuid == puuid } ?: return@withLock null
+        reauthenticate(account.cookies)?.also { r -> RiotAccounts.update(puuid) { it.copy(cookies = r.cookies) } }
     }
 
     /** Cookie sesi lama yang masih tersimpan di WebView (Valoid sebelum dukungan banyak akun). */
@@ -977,6 +992,7 @@ class RiotRepository(
     }
 
     private companion object {
+        val reauthLock = Mutex()
         val JSON = "application/json".toMediaType()
         const val TYPE_SKIN = "e7c63390-eda7-46e0-bb7a-a6abdacd2433"
         const val TYPE_CARD = "3f296c07-64c3-494c-923b-fe692a4fa1bd"
