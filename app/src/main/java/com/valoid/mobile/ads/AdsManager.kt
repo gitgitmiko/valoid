@@ -19,6 +19,7 @@ object AdsManager {
     private val started = AtomicBoolean(false)
     private var rewarded: RewardedAd? = null
     private var loading = false
+    private val waiting = mutableListOf<(Boolean) -> Unit>()
 
     /** Meminta persetujuan bila diwajibkan (mis. pengguna EEA/UK), lalu menyiapkan AdMob. */
     fun initialize(activity: Activity) {
@@ -42,6 +43,8 @@ object AdsManager {
 
     fun preload(context: Context, onResult: (Boolean) -> Unit = {}) {
         if (rewarded != null) return onResult(true)
+        // Permintaan yang datang saat iklan masih dimuat ikut menunggu hasil pemuatan yang sama.
+        waiting += onResult
         if (loading) return
         loading = true
         RewardedAd.load(
@@ -52,15 +55,21 @@ object AdsManager {
                 override fun onAdLoaded(ad: RewardedAd) {
                     loading = false
                     rewarded = ad
-                    onResult(true)
+                    finish(true)
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
-                    onResult(false)
+                    finish(false)
                 }
             },
         )
+    }
+
+    private fun finish(ok: Boolean) {
+        val callbacks = waiting.toList()
+        waiting.clear()
+        callbacks.forEach { it(ok) }
     }
 
     /**
@@ -70,7 +79,7 @@ object AdsManager {
     fun showRewarded(activity: Activity, onRewarded: () -> Unit, onFailed: (String) -> Unit) {
         val ad = rewarded
         if (ad == null) {
-            preload(activity) { ok -> if (ok) showRewarded(activity, onRewarded, onFailed) else onFailed("Iklan belum tersedia.") }
+            preload(activity) { ok -> if (ok) showRewarded(activity, onRewarded, onFailed) else onFailed("Iklan belum tersedia. Coba lagi sebentar, dan matikan pemblokir iklan atau DNS privat bila aktif.") }
             return
         }
         rewarded = null

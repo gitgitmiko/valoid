@@ -124,7 +124,6 @@ fun ValoidApp(
     var debugPro by remember { mutableStateOf(ProManager.debugOverride) }
     var adWatching by remember { mutableStateOf(false) }
     var adError by remember { mutableStateOf<String?>(null) }
-    var adFailures by remember { mutableStateOf(0) }
     var unlockTick by remember { mutableStateOf(0) }
     var showFavorites by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
@@ -546,7 +545,6 @@ fun ValoidApp(
                                 StoreLockedCard(
                                     watching = adWatching,
                                     error = adError,
-                                    allowSkip = adFailures >= 2,
                                     onWatch = {
                                         val activity = context as? android.app.Activity ?: return@StoreLockedCard
                                         adWatching = true
@@ -555,20 +553,14 @@ fun ValoidApp(
                                             activity,
                                             onRewarded = {
                                                 adWatching = false
-                                                adFailures = 0
                                                 StoreUnlock.unlock(context, rotation)
                                                 unlockTick++
                                             },
                                             onFailed = {
                                                 adWatching = false
-                                                adFailures++
                                                 adError = it
                                             },
                                         )
-                                    },
-                                    onSkip = {
-                                        StoreUnlock.unlock(context, rotation)
-                                        unlockTick++
                                     },
                                     onPro = { showPaywall = true },
                                 )

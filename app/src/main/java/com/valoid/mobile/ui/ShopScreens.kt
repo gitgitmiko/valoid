@@ -233,9 +233,7 @@ fun HistoryScreen(days: List<HistoryDay>, loading: Boolean, error: String?, onRe
 fun StoreLockedCard(
     watching: Boolean,
     error: String?,
-    allowSkip: Boolean,
     onWatch: () -> Unit,
-    onSkip: () -> Unit,
     onPro: () -> Unit,
 ) {
     androidx.compose.material3.Surface(
@@ -260,9 +258,6 @@ fun StoreLockedCard(
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp)) }
             Button(onClick = onWatch, enabled = !watching, modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(52.dp)) {
                 Text(if (watching) "Memuat iklan..." else "Tonton iklan", fontWeight = FontWeight.SemiBold)
-            }
-            if (allowSkip) {
-                OutlinedButton(onClick = onSkip, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Iklan tidak tersedia, buka toko") }
             }
             androidx.compose.material3.TextButton(onClick = onPro, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Tanpa iklan dengan Valoid Pro")
