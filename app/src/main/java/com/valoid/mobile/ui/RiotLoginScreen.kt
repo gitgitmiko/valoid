@@ -58,6 +58,16 @@ private const val DISMISS_COOKIE_BANNER =
         "document.querySelector('.onetrust-close-btn-handler');if(b)b.click();})();"
 
 /** UA bawaan WebView memuat "; wv" dan "Version/x.y" yang membuat halaman login/captcha menolak render. */
+/**
+ * Mencentang "Stay signed in" sekali agar cookie sesi Riot berumur panjang dan login ulang otomatis
+ * jarang gagal. Kotak diklik (bukan diubah lewat .checked) supaya state form React ikut berubah;
+ * setelah itu tidak disentuh lagi sehingga pengguna tetap bisa menghapus centangnya.
+ */
+private const val CHECK_STAY_SIGNED_IN =
+    "(function(){if(window.__valoidRemember)return;window.__valoidRemember=true;var n=0;" +
+        "var t=setInterval(function(){var c=document.getElementById('rememberme');" +
+        "if(c){clearInterval(t);if(!c.checked)c.click();}else if(++n>40)clearInterval(t);},500);})();"
+
 private fun browserUserAgent(default: String): String =
     default.replace("; wv", "").replace(Regex("Version/\\d+\\.\\d+\\s"), "")
 
@@ -162,6 +172,7 @@ fun RiotLoginScreen(
                             // Tutup banner cookie bila ada agar tidak menutupi form login.
                             view.evaluateJavascript(DISMISS_COOKIE_BANNER, null)
                             view.evaluateJavascript(FIX_LAYOUT, null)
+                            view.evaluateJavascript(CHECK_STAY_SIGNED_IN, null)
                         }
 
                         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
