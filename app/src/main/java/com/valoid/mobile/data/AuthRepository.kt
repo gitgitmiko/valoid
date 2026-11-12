@@ -1,11 +1,6 @@
 package com.valoid.mobile.data
 
 import android.content.Context
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
@@ -68,28 +63,13 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     }
 
     private suspend fun googleCredential(activityContext: Context, webClientId: String): AuthCredential {
-        val option = GetGoogleIdOption.Builder()
-            .setServerClientId(webClientId)
-            .setFilterByAuthorizedAccounts(false)
-            .build()
-        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        // Pemilih akun bisa menggantung tanpa error di sebagian perangkat; batasi agar tombol tidak loading selamanya.
-        val credential = withTimeoutOrNull(PICKER_TIMEOUT_MS) {
-            CredentialManager.create(activityContext).getCredential(activityContext, request)
-        }?.credential ?: throw GoogleSignInTimeoutException("pemilih akun")
-        if (credential !is CustomCredential ||
-            credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-        ) {
-            error("Kredensial Google tidak dikenali")
-        }
-        val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+        val idToken = GoogleSignInActivity.requestIdToken(activityContext, webClientId)
         return GoogleAuthProvider.getCredential(idToken, null)
     }
 
     fun signOut() = auth.signOut()
 
     private companion object {
-        const val PICKER_TIMEOUT_MS = 90_000L
         const val FIREBASE_TIMEOUT_MS = 30_000L
     }
 }
