@@ -1,6 +1,9 @@
 package com.valoid.mobile.ui
 
 import android.content.Context
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseNetworkException
@@ -10,6 +13,7 @@ import com.valoid.mobile.data.AuthRepository
 import com.valoid.mobile.data.ChatRepository
 import com.valoid.mobile.data.Presence
 import com.valoid.mobile.data.FavoritesRepository
+import com.valoid.mobile.data.GoogleSignInTimeoutException
 import com.valoid.mobile.data.HistoryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -120,7 +124,10 @@ class AuthViewModel(
             else -> "Autentikasi gagal (${e.errorCode})."
         }
         e is IllegalArgumentException -> "Email atau password tidak boleh kosong."
-        e.javaClass.simpleName.contains("GetCredential") -> "Login Google dibatalkan atau gagal."
-        else -> e.message ?: "Terjadi kesalahan."
+        e is GetCredentialCancellationException -> "Login Google dibatalkan."
+        e is NoCredentialException -> "Tidak ada akun Google di perangkat ini. Tambahkan akun di Setelan lalu coba lagi."
+        e is GetCredentialException -> "Login Google gagal (${e.type.substringAfterLast('.')}): ${e.message.orEmpty()}"
+        e is GoogleSignInTimeoutException -> "Login Google tidak merespons (${e.stage}). Coba lagi."
+        else -> e.message ?: "Terjadi kesalahan (${e.javaClass.simpleName})."
     }
 }

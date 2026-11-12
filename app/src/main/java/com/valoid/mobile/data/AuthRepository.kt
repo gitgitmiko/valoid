@@ -15,6 +15,10 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** Langkah login Google yang tidak selesai dalam batas waktu; [stage] membedakan pemilih akun dan Firebase. */
+class GoogleSignInTimeoutException(val stage: String) : Exception("Login Google tidak merespons ($stage)")
 
 class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()) {
 
@@ -43,7 +47,9 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
         get() = auth.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
 
     suspend fun signInWithGoogle(activityContext: Context, webClientId: String) {
-        auth.signInWithCredential(googleCredential(activityContext, webClientId)).await()
+        val credential = googleCredential(activityContext, webClientId)
+        withTimeoutOrNull(FIREBASE_TIMEOUT_MS) { auth.signInWithCredential(credential).await() }
+            ?: throw GoogleSignInTimeoutException("firebase")
     }
 
     /** Verifikasi ulang sebelum operasi sensitif; Firebase menolak hapus akun jika login sudah lama. */
@@ -67,9 +73,10 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
             .setFilterByAuthorizedAccounts(false)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        val credential = CredentialManager.create(activityContext)
-            .getCredential(activityContext, request)
-            .credential
+        // Pemilih akun bisa menggantung tanpa error di sebagian perangkat; batasi agar tombol tidak loading selamanya.
+        val credential = withTimeoutOrNull(PICKER_TIMEOUT_MS) {
+            CredentialManager.create(activityContext).getCredential(activityContext, request)
+        }?.credential ?: throw GoogleSignInTimeoutException("pemilih akun")
         if (credential !is CustomCredential ||
             credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) {
@@ -80,4 +87,9 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     }
 
     fun signOut() = auth.signOut()
+
+    private companion object {
+        const val PICKER_TIMEOUT_MS = 90_000L
+        const val FIREBASE_TIMEOUT_MS = 30_000L
+    }
 }
