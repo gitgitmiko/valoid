@@ -6,6 +6,26 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.valoid.mobile.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,18 +86,72 @@ object Onboarding {
     }
 }
 
+/** Layar pembuka: latar HD, logo yang muncul membesar dengan cahaya berdenyut, dan bar memuat. */
 @Composable
 fun SplashScreen() {
-    Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.weight(1f))
-        ValoidLogo(132.dp)
-        Spacer(Modifier.weight(1f))
-        Text("VALOID HUB", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary, strokeWidth = 3.dp, modifier = Modifier.padding(top = 28.dp).size(32.dp))
-        Text("Memuat", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), modifier = Modifier.padding(top = 12.dp, bottom = 48.dp))
+    val enter = remember { Animatable(0f) }
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch { enter.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 120f)) }
+        progress.animateTo(1f, tween(durationMillis = 1150, easing = FastOutSlowInEasing))
+    }
+    val pulse by rememberInfiniteTransition(label = "glow").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "glow",
+    )
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF0F0B1C))) {
+        val logoSize = maxWidth * 0.56f
+        Image(
+            painter = painterResource(R.drawable.splash_bg),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Cahaya ungu di belakang logo, berdenyut pelan selama memuat.
+        Box(
+            Modifier.align(Alignment.Center).size(logoSize * 1.25f).graphicsLayer { alpha = pulse }
+                .background(Brush.radialGradient(listOf(Color(0x99A78BFA), Color.Transparent))),
+        )
+        Image(
+            painter = painterResource(R.drawable.valoid_logo),
+            contentDescription = "Valoid",
+            modifier = Modifier.align(Alignment.Center).size(logoSize).graphicsLayer {
+                // Mulai seukuran ikon di splash sistem agar logo terasa menyambung, lalu membesar.
+                val e = enter.value
+                scaleX = 0.6f + 0.4f * e
+                scaleY = 0.6f + 0.4f * e
+            },
+        )
+        Column(
+            Modifier.align(Alignment.Center).offset(y = logoSize * 0.5f + 92.dp)
+                .graphicsLayer { alpha = enter.value.coerceIn(0f, 1f); translationY = (1f - enter.value) * 40f },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "VALOID HUB",
+                style = MaterialTheme.typography.displaySmall.copy(
+                    shadow = Shadow(Color(0xCC000000), offset = Offset(0f, 4f), blurRadius = 12f),
+                ),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "Toko · Rank · Party",
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        LinearProgressIndicator(
+            progress = { progress.value },
+            color = MaterialTheme.colorScheme.secondary,
+            trackColor = Color(0xFF2A2540),
+            strokeCap = StrokeCap.Round,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                .padding(bottom = 72.dp).width(132.dp).height(5.dp),
+        )
     }
 }
 

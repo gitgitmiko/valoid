@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 
@@ -47,12 +48,12 @@ fun ValoidLogo(size: androidx.compose.ui.unit.Dp) {
         androidx.compose.ui.Modifier
             .size(size)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f))
-            .background(Color(0xFF16141C)),
+            .background(Color(0xFF0F0B1C)),
     ) {
         androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(com.valoid.mobile.R.drawable.ic_launcher_foreground),
+            painter = androidx.compose.ui.res.painterResource(com.valoid.mobile.R.drawable.valoid_logo),
             contentDescription = "Valoid",
-            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+            modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(size * 0.1f),
         )
     }
 }
