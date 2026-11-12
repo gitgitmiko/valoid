@@ -71,7 +71,7 @@ def main():
 
     # Ikon Play Store dan pratinjau.
     full = src.convert("RGB")
-    full.resize((512, 512), Image.LANCZOS).save(os.path.join(ROOT, "docs/icon/valoid-icon-playstore-512.png"))
+    full.resize((512, 512), Image.LANCZOS).convert("RGBA").save(os.path.join(ROOT, "docs/icon/valoid-icon-playstore-512.png"))
     full.resize((1024, 1024), Image.LANCZOS).save(os.path.join(ROOT, "docs/icon/valoid-icon-1024.png"))
 
 
